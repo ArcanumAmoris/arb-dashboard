@@ -1,0 +1,15 @@
+{
+  "name": "arb-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Free, read-only arbitrage and mispricing scanner (Kalshi + crypto + metals) with a GitHub Pages dashboard.",
+  "scripts": {
+    "scan": "node scanner/run.js --out out",
+    "alerts": "node scanner/alerts.js",
+    "test-email": "node scanner/testEmail.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": { "nodemailer": "^6.9.16" }
+}

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How Arb Desk Works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%230e6b60%22/%3E%3Cpath d=%22M7 22l6-7 5 4 7-9%22 stroke=%22white%22 stroke-width=%223%22 fill=%22none%22/%3E%3C/svg%3E">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">ARB</span><h1>Arb Desk</h1></a>
+    <nav class="pages" aria-label="Pages">
+      <a href="index.html">Dashboard</a>
+      <a href="how.html" aria-current="page">How this works</a>
+      <a href="platforms.html">Platforms</a>
+    </nav>
+    <button type="button" class="icon-btn" id="theme-btn">Theme: auto</button>
+  </div>
+</header>
+
+<main class="wrap prose" style="padding-block:24px 40px">
+  <h1 style="font-size:1.8rem">How this works</h1>
+  <p>Every 10 minutes a free GitHub Actions job pulls prices from public APIs, runs the checks below, and publishes one file, <code>data.json</code>. The dashboard reads that file, re-scores everything for the amount you type in, and shows what to buy. Nothing ever logs in to your accounts or places a trade.</p>
+  <p>Every number is <b>after fees</b>, assuming you buy immediately at the displayed <b>ask</b> (the price someone is selling at right now). That's the conservative assumption: you pay the spread and the taker fee.</p>
+
+  <h2>Kalshi fees in one line</h2>
+  <p>Kalshi's fee schedule (effective July 7, 2026) charges takers <code>0.07 × contracts × price × (1 − price)</code>, rounded up to the next $0.0001, times a per-series multiplier the API reports (most are 1; a few year-end crypto series are 0). The fee is largest at 50¢ (1.75¢ per contract) and tiny near 1¢ or 99¢ (0.07¢). Settlement is free. Selling before settlement pays the fee again, which the dashboard never assumes you do.</p>
+
+  <h2>1 · Kalshi bracket and ladder consistency <span class="status">live</span></h2>
+  <p>Kalshi lists the same underlying at many levels. Some combinations must be priced consistently or free money appears. The scanner checks every open crypto, commodities, economics and financials event (about 20,000 contracts) four ways:</p>
+  <ul>
+    <li><b>Ladders.</b> “BTC above $105k” can never be more likely than “BTC above $100k”. If it's priced higher, buy YES on $100k and NO on $105k. One of them always pays, and both pay if BTC ends between the two.</li>
+    <li><b>Bracket sums.</b> When ranges cover every possible price with no gaps, exactly one pays $1. If one YES of each costs under $1 including fees, the difference is locked in.</li>
+    <li><b>NO sets.</b> When at most one outcome can win (for example Fed “cut / hold / hike”), holding NO on k of them pays at least k − 1 dollars. Buy them for less than that and you're locked in.</li>
+    <li><b>YES + NO</b> on one contract always pays exactly $1.</li>
+  </ul>
+  <div class="example">
+    <p><b>Worked example (ladder).</b> “BTC above $100,000” has an ask of 40¢. “BTC above $105,000” has a <i>bid</i> of 45¢, so it's priced as more likely than the lower strike. That's impossible.</p>
+    <p>Buy YES “above $100k” at 40¢ (fee 0.07 × 0.40 × 0.60 = 1.68¢) and NO “above $105k” at 55¢ (fee 0.07 × 0.55 × 0.45 = 1.7325¢, rounded up to 1.74¢). One set costs <b>98.42¢</b>.</p>
+    <p>BTC ≤ $100k: the NO pays $1. BTC > $105k: the YES pays $1. In between: both pay, $2. Worst case $1.00 back for 98.42¢, a <b>1.6% locked gain</b> per set. If it settles in 7 days, that's 1.6% × 365 ÷ 7 = 84% a year.</p>
+  </div>
+  <p>The scanner deliberately skips “buy YES on every outcome” for named outcomes such as “Who will acquire Pinterest?” or “When will the next recession start?”. There, it's common that <i>none</i> of the listed outcomes happens and every YES loses. On the first live scan that trap looked like a 226% “arbitrage”.</p>
+
+  <h2>2 · Kalshi vs the real market price <span class="status">coming in stage 2</span></h2>
+  <p>A Kalshi contract like “BTC above $90,000 on Friday” can be compared with what the spot price and recent volatility imply. The model assumes the log of the price moves randomly (lognormal), with volatility measured from recent prices and zero drift. Every assumption is shown on the card. This is a <b>positive expected value, can still lose</b> trade, never a locked one.</p>
+  <div class="example">
+    <p><b>Worked example.</b> BTC spot $84,455, strike $90,000, 5 days left, recent volatility 45% a year.</p>
+    <p>σ√T = 0.45 × √(5/365) = 0.0527. d₂ = [ln(84,455 / 90,000) − ½σ²T] ÷ σ√T = (−0.0636 − 0.0014) ÷ 0.0527 = −1.23. Model probability = N(−1.23) ≈ <b>10.9%</b>.</p>
+    <p>If Kalshi's YES ask is 5¢ (fee 0.33¢), expected value per contract = 10.87¢ − 5.33¢ = <b>about +5.5¢</b>. But about 89% of the time you lose your 5.33¢. It only works over many such bets, and only if the volatility estimate is right.</p>
+  </div>
+
+  <h2>3 · Fed and economic contracts vs futures <span class="status">coming in stage 3</span></h2>
+  <p>Fed funds futures settle on the average fed funds rate for their month, so price = 100 − expected average rate. If a meeting falls partway through the month, the rate after the meeting is backed out from the days before and after it. The size of the implied move divided by 0.25 gives the probability of a quarter-point change.</p>
+  <div class="example">
+    <p><b>Worked example.</b> The rate is 3.58% today. The December meeting is on the 9th: 9 days at the old rate, 22 at the new one. The December future trades at 96.50, so the expected December average is 3.50%.</p>
+    <p>Rate after the meeting = (3.50 − 3.58 × 9/31) ÷ (22/31) = 3.467%. That's 0.113 points lower, and 0.113 ÷ 0.25 = <b>45% chance of a 25bp cut</b>. If Kalshi's “cut” YES sells for 38¢, the gap is 7 points. You'd buy YES at 38¢: positive expected value that can still lose.</p>
+    <p>Honest caveat for stage 3: live fed funds futures quotes aren't reliably free. If no free source supports this calculation properly, the module will say “limited data” rather than show fake precision.</p>
+  </div>
+
+  <h2>4 · Crypto futures basis (cash-and-carry) <span class="status">coming in stage 3</span></h2>
+  <p>When a crypto future trades above spot, you can buy the coin and sell the future. At expiry they converge and you keep the gap. It's close to locked, but not fully: the short future needs <b>margin</b>, and if the price spikes the broker can demand more cash or <b>liquidate</b> your short. That breaks the hedge at the worst moment.</p>
+  <div class="example">
+    <p><b>Worked example.</b> BTC spot $84,000, December future $85,500, 90 days to expiry. The gap is 1.79%, which looks like 7.2% a year.</p>
+    <p>Now the costs: Coinbase Advanced charges 1.20% to take liquidity at the lowest volume tier, plus futures fees and the cost of cash parked as margin. Net ≈ 0.5% over 90 days ≈ <b>2% a year: less than T-bills. NOT WORTH IT</b>, even though the headline looked good.</p>
+  </div>
+
+  <h2>5 · Metal ETFs vs the actual metal <span class="status">coming in stage 2</span></h2>
+  <p>GLD and SLV hold physical metal. Big institutions can create or redeem shares for metal whenever the price drifts, which keeps the gap to a few hundredths of a percent. Closed-end trusts like PHYS and PSLV can't be redeemed as easily, so they can trade at real premiums or discounts for months.</p>
+  <div class="example">
+    <p><b>Worked example.</b> A GLD share holds about 0.09 oz of gold (the fund publishes the exact figure daily). With gold at $4,286, the metal behind a share is worth about $393. A 0.1% gap is noise, not a trade.</p>
+    <p>If PSLV trades 3% below the value of its silver, buying it is a <b>discount trade, not arbitrage: it may not close</b>. NAV is published once a day, so the comparison can lag by up to a trading day.</p>
+  </div>
+
+  <h2>6 · Cash-hurdle comparison <span class="status">live, on every card</span></h2>
+  <p>Money tied up in a trade could be earning the T-bill rate with no effort and no risk. So every opportunity is annualized (return × 365 ÷ days held) and compared with the current 3-month T-bill yield plus a margin: 1 point for locked trades, 10 points for can-still-lose trades (you can change these). Fall short and the card says NOT WORTH IT, however good the raw percentage looks.</p>
+  <div class="example">
+    <p><b>Worked example, from the first live scan.</b> Ethereum's year-end brackets could be bought for 96.8¢ a set. They pay exactly $1, and the series has zero fees. Only 44 sets were available at profitable prices, for $0.50 of guaranteed profit.</p>
+    <p>That's 1.16% over 96 days = 4.4% a year. T-bills pay 4.18%, so the hurdle is 5.18%. <b>Verdict: MARGINAL.</b> It's a real arbitrage, but locking up $43 for three months to beat a Treasury bill by a fraction of a point isn't worth your time.</p>
+  </div>
+
+  <h2>Verdicts, alerts and confidence</h2>
+  <ul>
+    <li><b>WORTH IT</b> needs all three: at least $5 profit, at least 2% return, and an annualized return above the hurdle. <b>MARGINAL</b> is profitable but misses one. <b>NOT WORTH IT</b> loses money or trails T-bills.</li>
+    <li><b>Email alerts:</b> locked trades at 12%+ a year that clearly beat T-bills (Tier 1), or can-lose trades at 40%+ a year (Tier 2). Only high or medium confidence, at least $100 fillable, at least $5 profit, at most 5 emails a day, and never the same one twice unless its profit improves by more than 25%.</li>
+    <li><b>Confidence</b> drops when a leg hasn't traded in 24 hours, the market closes soon, depth is thin, or the return is over 25% (usually a stale or mistaken quote).</li>
+  </ul>
+
+  <h2>Why real arbitrage is rare, and how to avoid getting burned</h2>
+  <ul>
+    <li><b>Other people run scanners too.</b> Professional market makers watch these same prices constantly. Anything obvious is closed in seconds. What's left is usually tiny, thin, or far away in time.</li>
+    <li><b>The data can be 10 to 25 minutes old.</b> Always open the contract and check the live ask before buying. If it's gone, it's gone.</li>
+    <li><b>Buy the thinnest leg first.</b> Until every leg is filled you're not hedged. If the second leg's price jumps, you're holding an ordinary bet.</li>
+    <li><b>Read the rules.</b> Settlement sources, rounding and “what if none of these happens” clauses decide whether a “locked” trade really is.</li>
+    <li><b>Too good to be true usually is.</b> A 30% “risk-free” return almost always means a stale quote, a data error, or a rule you haven't read.</li>
+    <li><b>Count the time.</b> Tying up money for months to make 1% loses to a T-bill.</li>
+    <li><b>Platform risk is real.</b> Locked means locked against the market, not against an exchange halting, a disputed settlement, or a withdrawal delay.</li>
+  </ul>
+</main>
+<footer class="footer">Not financial advice. Prices move fast. Verify on the platform before trading.</footer>
+<script type="module">import { initChrome } from './lib/ui.js'; initChrome();</script>
+</body>
+</html>

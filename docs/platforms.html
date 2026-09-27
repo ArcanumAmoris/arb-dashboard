@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Arb Desk Platforms</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%230e6b60%22/%3E%3Cpath d=%22M7 22l6-7 5 4 7-9%22 stroke=%22white%22 stroke-width=%223%22 fill=%22none%22/%3E%3C/svg%3E">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">ARB</span><h1>Arb Desk</h1></a>
+    <nav class="pages" aria-label="Pages">
+      <a href="index.html">Dashboard</a>
+      <a href="how.html">How this works</a>
+      <a href="platforms.html" aria-current="page">Platforms</a>
+    </nav>
+    <button type="button" class="icon-btn" id="theme-btn">Theme: auto</button>
+  </div>
+</header>
+
+<main class="wrap" style="padding-block:24px 40px">
+  <div class="prose">
+    <h1 style="font-size:1.8rem">Platforms included and why</h1>
+    <p>Only venues that are legal and open to New York City residents are used for trades. Availability and fees were checked in September 2026. Both change, so recheck anything before relying on it. No sports contracts are scanned.</p>
+  </div>
+
+  <div class="section-head"><h2>Trading venues</h2></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Platform</th><th>Status for NYC</th><th>Used for</th><th>Fees the math includes</th></tr></thead>
+    <tbody>
+      <tr><td><b>Kalshi</b></td><td><span class="dot ok"></span>Included. CFTC-regulated exchange; non-sports markets open to NY residents.</td><td>Every Stage 1 trade (brackets, ladders, NO sets)</td><td>Taker fee 0.07 × C × P × (1−P) × series multiplier, rounded up to $0.0001 (schedule effective Jul 7 2026). No settlement fee. ACH deposits and withdrawals free; debit card deposits up to 2% (not included; use ACH).</td></tr>
+      <tr><td><b>Coinbase</b></td><td><span class="dot ok"></span>Included. Licensed in New York (BitLicense).</td><td>Crypto spot reference now; cash-and-carry leg in Stage 3</td><td>Advanced Trade lowest tier: 0.60% maker / 1.20% taker. Stage 3 will use the taker rate.</td></tr>
+      <tr><td><b>Gemini</b></td><td><span class="dot ok"></span>Included. New York-chartered trust company.</td><td>Crypto spot reference; alternative spot venue in Stage 3</td><td>Stage 3 will look up the current ActiveTrader schedule before using it.</td></tr>
+      <tr><td><b>Robinhood</b></td><td><span class="dot ok"></span>Included. Stocks, ETFs, options and crypto open in NY. Prediction markets open in NY for crypto, economics and finance (sports removed).</td><td>ETF legs (Stage 2); event contracts where priced differently from Kalshi</td><td>Stocks/ETFs: $0 commission, spread only. Event contracts: Robinhood commission 10% × P × (1−P), max 1¢/contract (5% with Gold), plus exchange fee up to 1¢.</td></tr>
+      <tr><td><b>Kraken</b></td><td><span class="dot err"></span>Excluded for trading. Kraken has blocked New York residents since 2015.</td><td>Price reference only (a third opinion on crypto spot)</td><td>Never used in a trade.</td></tr>
+      <tr><td><b>Polymarket (international)</b></td><td><span class="dot err"></span>Excluded. Blocks US users.</td><td>Nothing</td><td>—</td></tr>
+      <tr><td><b>Offshore crypto exchanges</b> (Binance.com, Bybit, OKX…)</td><td><span class="dot err"></span>Excluded. Not licensed for US/NY.</td><td>Nothing</td><td>—</td></tr>
+      <tr><td><b>Coinbase Derivatives</b> (US futures)</td><td><span class="dot"></span>To be verified in Stage 3 for NY access and free data.</td><td>Short futures leg for cash-and-carry</td><td>If NY access or free data can't be confirmed, the module will show as unavailable.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="section-head"><h2>Data sources (all free, no API keys)</h2></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Source</th><th>What</th><th>Delay</th></tr></thead>
+    <tbody>
+      <tr><td>Kalshi public API</td><td>All open events, markets, order books, fee multipliers</td><td>Live at scan time; scans run every ~10 min (GitHub can run late)</td></tr>
+      <tr><td>Coinbase Exchange, Gemini, Kraken public tickers</td><td>BTC, ETH, SOL, XRP, DOGE bid/ask</td><td>Live; also refreshed from your browser</td></tr>
+      <tr><td>gold-api.com</td><td>Gold, silver, platinum spot</td><td>Near live (about 1 min); indicative, not a tradable quote</td></tr>
+      <tr><td>U.S. Treasury daily bill rates (FRED DTB3 backup)</td><td>13-week T-bill yield for the cash hurdle</td><td>Published each business day; up to a day old</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="prose">
+    <h2>Sources checked</h2>
+    <ul class="small">
+      <li><a href="https://kalshi.com/docs/kalshi-fee-schedule.pdf" target="_blank" rel="noopener">Kalshi fee schedule (effective July 7, 2026)</a></li>
+      <li><a href="https://docs.kalshi.com/getting_started/quick_start_market_data" target="_blank" rel="noopener">Kalshi API: public market data</a></li>
+      <li><a href="https://legalclarity.org/is-kraken-available-in-new-york-why-its-blocked/" target="_blank" rel="noopener">Kraken availability in New York</a></li>
+      <li><a href="https://www.dimers.com/prediction-markets/robinhood/new-york" target="_blank" rel="noopener">Robinhood prediction markets in New York</a> and <a href="https://www.dimers.com/prediction-markets/robinhood/fees" target="_blank" rel="noopener">fees</a></li>
+      <li><a href="https://cryptofeediscount.com/academy/coinbase-fees-2026/" target="_blank" rel="noopener">Coinbase Advanced fees 2026</a></li>
+      <li><a href="https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView?type=daily_treasury_bill_rates" target="_blank" rel="noopener">Treasury daily bill rates</a></li>
+    </ul>
+  </div>
+</main>
+<footer class="footer">Not financial advice. Prices move fast. Verify on the platform before trading.</footer>
+<script type="module">import { initChrome } from './lib/ui.js'; initChrome();</script>
+</body>
+</html>

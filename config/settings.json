@@ -1,0 +1,40 @@
+{
+  "_readme": "Edit these numbers to change how the scanner judges and alerts. All money figures are AFTER fees. Percentages are written as numbers (3 means 3%).",
+
+  "verdict": {
+    "defaultAmount": 500,
+    "minProfit": 5,
+    "minReturnPct": 2,
+    "lockedMarginPct": 1.0,
+    "evMarginPct": 10.0,
+    "minHoldDays": 1,
+    "feeRoundTo": 0.0001,
+    "_notes": "lockedMarginPct/evMarginPct = how far above the T-bill rate the annualized return must be ('clearly beats'). minHoldDays floors the hold time so hourly markets don't annualize into fantasy numbers. feeRoundTo: Kalshi rounds fee+cost up to $0.0001 (July 2026 schedule); set 0.01 to be extra conservative."
+  },
+
+  "alerts": {
+    "enabled": true,
+    "amount": 500,
+    "tier1MinAnnualizedPct": 12,
+    "tier2MinAnnualizedPct": 40,
+    "minProfit": 5,
+    "minFillDollars": 100,
+    "allowedConfidence": ["high", "medium"],
+    "tooGoodReturnPct": 25,
+    "reAlertImprovementPct": 25,
+    "maxEmailsPerDay": 5,
+    "timezone": "America/New_York",
+    "_notes": "tier1 = locked-in arbitrage: 3% per 3 months = 12%/yr AND must also beat T-bills + lockedMarginPct. tier2 = positive-EV-can-lose: 10% per 3 months = 40%/yr. minProfit stops emails about pennies (same $5 as the card verdict). Set enabled=false to stop all emails."
+  },
+
+  "scan": {
+    "categories": ["Crypto", "Commodities", "Economics", "Financials"],
+    "excludeCategories": ["Sports"],
+    "maxOrderbookFetches": 80,
+    "requestGapMs": 150,
+    "staleMinutes": 25,
+    "nearMissCount": 15
+  },
+
+  "tbillFallbackPct": null
+}

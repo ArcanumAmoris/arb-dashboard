@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Arb Desk</title>
+<meta name="description" content="Free, read-only scanner for arbitrage and mispricing on Kalshi, with crypto and metals reference prices.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%230e6b60%22/%3E%3Cpath d=%22M7 22l6-7 5 4 7-9%22 stroke=%22white%22 stroke-width=%223%22 fill=%22none%22/%3E%3C/svg%3E">
+<script src="config.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">ARB</span><h1>Arb Desk</h1></a>
+    <nav class="pages" aria-label="Pages">
+      <a href="index.html" aria-current="page">Dashboard</a>
+      <a href="how.html">How this works</a>
+      <a href="platforms.html">Platforms</a>
+    </nav>
+    <button type="button" class="icon-btn" id="theme-btn">Theme: auto</button>
+  </div>
+</header>
+<div class="stale" id="stale" hidden>
+  <div class="wrap">Data is more than 25 minutes old. GitHub's scheduler is running late, so every opportunity below may no longer exist. Don't trade on it until it refreshes.</div>
+</div>
+
+<main class="wrap">
+  <section class="summary" aria-label="Summary">
+    <div class="age" id="age">
+      <span class="label">Data is</span>
+      <span class="big">—</span>
+      <span class="small muted" id="scan-time">loading…</span>
+    </div>
+    <div id="sum-worth"><span class="label">Worth it now</span><span class="big">—</span><span class="small muted sub"></span></div>
+    <div id="sum-best"><span class="label">Best profit</span><span class="big">—</span><span class="small muted sub"></span></div>
+    <div id="sum-tbill"><span class="label">T-bill rate<button type="button" class="tip" aria-label="What is the T-bill rate?" data-tip="What 3-month U.S. Treasury bills pay: the near-risk-free return you get for doing nothing. Every opportunity must clearly beat it.">?</button></span><span class="big">—</span><span class="small muted sub"></span></div>
+    <div>
+      <span class="label">Refresh</span>
+      <div class="refresh-row"><button type="button" class="btn" id="refresh-btn">Refresh now</button></div>
+      <span class="small muted" id="countdown">Next refresh in 10:00</span>
+    </div>
+  </section>
+
+  <div class="layout">
+    <aside class="controls" aria-label="Controls">
+      <div class="panel field">
+        <label class="label" for="amount">Amount I want to use ($)</label>
+        <input class="amount" type="number" id="amount" min="1" step="50" value="500" inputmode="decimal">
+        <span class="small muted">Optional. Every dollar figure scales to this, capped by what the order books can actually fill.</span>
+      </div>
+      <details class="panel filters" id="filters-box" open>
+        <summary class="label">Filters</summary>
+        <div style="display:grid;gap:10px">
+        <div class="field"><label for="f-verdict" class="small">Verdict</label><select id="f-verdict" data-key="verdict"></select></div>
+        <div class="field"><label for="f-risk" class="small">Risk label</label><select id="f-risk" data-key="risk"></select></div>
+        <div class="field"><label for="f-asset" class="small">Asset</label><select id="f-asset" data-key="asset"></select></div>
+        <div class="field"><label for="f-module" class="small">Module</label><select id="f-module" data-key="module"></select></div>
+        <div class="field"><label for="f-platform" class="small">Platform</label><select id="f-platform" data-key="platform"></select></div>
+        <label class="check"><input type="checkbox" id="show-not"> Show NOT WORTH IT</label>
+        </div>
+      </details>
+      <details class="panel">
+        <summary>Verdict thresholds</summary>
+        <div style="display:grid;gap:10px;margin-top:10px">
+          <div class="row2">
+            <div class="field"><label for="th-profit" class="small">Min profit ($)</label><input type="number" id="th-profit" step="1" min="0"></div>
+            <div class="field"><label for="th-return" class="small">Min return (%)</label><input type="number" id="th-return" step="0.5" min="0"></div>
+          </div>
+          <div class="field"><label for="th-margin" class="small">Must beat T-bills by (points/yr)</label><input type="number" id="th-margin" step="0.5" min="0"></div>
+          <button type="button" class="btn small ghost" id="th-reset">Reset to defaults</button>
+          <span class="small muted">WORTH IT needs all three. Changes here only affect this browser; email alerts use config/settings.json.</span>
+        </div>
+      </details>
+    </aside>
+
+    <div id="main">
+      <div id="notices"></div>
+      <div class="section-head"><h2>Opportunities</h2><span class="small muted" id="cards-count"></span></div>
+      <div class="grid" id="cards"><div class="empty">Loading…</div></div>
+
+      <div class="section-head"><h2>Closest calls</h2><span class="small muted">The checks that came nearest to a locked-in profit this scan</span></div>
+      <div id="near"></div>
+
+      <div class="section-head"><h2>Reference prices</h2><span class="small muted">Crypto and metals spot. Not used by Stage 1 trades.</span></div>
+      <div id="spot"></div>
+
+      <div class="section-head"><h2>Data sources and delays</h2></div>
+      <div id="sources"></div>
+    </div>
+  </div>
+</main>
+
+<footer class="footer">Not financial advice. Prices move fast. Verify on the platform before trading.</footer>
+<script type="module" src="app.js"></script>
+</body>
+</html>
