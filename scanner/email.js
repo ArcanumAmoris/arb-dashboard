@@ -5,7 +5,7 @@
 //   ALERT_TO_EMAIL      where alerts go
 // Nothing here is ever written to the repo or the public data branch.
 import nodemailer from 'nodemailer';
-import { legInstructions } from '../docs/lib/format.js';
+import { legInstructions, legPays, scenarios, profitSource } from '../docs/lib/format.js';
 
 export function mailerConfigured() {
   return Boolean(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD && process.env.ALERT_TO_EMAIL);
@@ -44,7 +44,10 @@ export function formatAlert(items, { dataAgeMin, dashboardUrl, tbill }) {
     const t = [
       `${x.tooGood ? 'VERIFY FIRST: likely stale data or a mispriced/illiquid contract.\n' : ''}${x.tierName} — ${ev.verdict} — ${opp.riskLabel} — confidence ${opp.confidence.level}`,
       opp.title,
-      ...ins.map((s, i) => `  ${i + 1}. ${s}`),
+      `Where the profit comes from: ${profitSource(opp, ev)}`,
+      ...ins.map((s, i) => `  Side ${i + 1}: ${s} (${legPays(opp.legs[i])})`),
+      'What you get back:',
+      ...scenarios(opp).map(r => `  If ${r.when.charAt(0).toLowerCase() + r.when.slice(1)}: $${(r.total * ev.qty).toFixed(2)} back (profit $${(r.total * ev.qty - ev.cost).toFixed(2)})`),
       `Total cost: ${$(ev.cost)} (fees ${$(ev.fees)})`,
       `Expected profit: ${$(x.ev.opp_profit)} (${pct(ev.returnPct)} return) — worst case ${$(worst)}, best case ${$(ev.profitBest)}, max loss ${$(ev.maxLoss)}`,
       `Annualized: ${pct(ev.annualizedPct, 1)} vs T-bill ${pct(tbill)} — money tied up about ${ev.days.toFixed(1)} days (settles ${new Date(opp.settleTime).toUTCString()})`,
@@ -56,7 +59,10 @@ export function formatAlert(items, { dataAgeMin, dashboardUrl, tbill }) {
       ${x.tooGood ? '<p style="background:#fff3cd;padding:8px;font-weight:700">VERIFY FIRST: likely stale data or a mispriced/illiquid contract.</p>' : ''}
       <p style="margin:0 0 6px"><b>${esc(x.tierName)}</b> · ${esc(ev.verdict)} · ${esc(opp.riskLabel)} · confidence ${esc(opp.confidence.level)}</p>
       <h3 style="margin:4px 0 10px">${esc(opp.title)}</h3>
-      <ol>${ins.map(s => `<li>${esc(s)}</li>`).join('')}</ol>
+      <p style="background:#e6f3f0;padding:8px 10px;border-radius:6px"><b>Where the profit comes from:</b> ${esc(profitSource(opp, ev))}</p>
+      <ol>${ins.map((s, i) => `<li><b>Side ${i + 1}:</b> ${esc(s)} <i>(${esc(legPays(opp.legs[i]))})</i></li>`).join('')}</ol>
+      <p style="margin:6px 0 2px"><b>What you get back:</b></p>
+      <ul>${scenarios(opp).map(r => `<li>If ${esc(r.when.charAt(0).toLowerCase() + r.when.slice(1))}: $${(r.total * ev.qty).toFixed(2)} back (profit $${(r.total * ev.qty - ev.cost).toFixed(2)})</li>`).join('')}</ul>
       <table cellpadding="4" style="font-size:14px">
         <tr><td>Total cost</td><td><b>${$(ev.cost)}</b> (fees ${$(ev.fees)})</td></tr>
         <tr><td>Expected profit</td><td><b>${$(x.ev.opp_profit)}</b> (${pct(ev.returnPct)})</td></tr>

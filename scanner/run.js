@@ -100,7 +100,9 @@ results.sort((a, b) => (b.evalDefault.profitWorst ?? -1e9) - (a.evalDefault.prof
 // near misses: the closest the market came to an arbitrage (shows the scanner is working)
 // (single-contract YES+NO sums are left out: they almost always miss by exactly one tick)
 const seenEv = new Set();
-const nearMisses = checks.filter(c => c.gap >= 0 && c.type !== 'yes-plus-no').sort((a, b) => a.gap - b.gap)
+// Also skip pairs priced at the extremes (99¢ + 1¢): those always miss by one tick and teach nothing.
+const informative = c => (c.legs || []).every(l => l.price == null || (l.price >= 0.03 && l.price <= 0.97));
+const nearMisses = checks.filter(c => c.gap >= 0 && c.type !== 'yes-plus-no' && informative(c)).sort((a, b) => a.gap - b.gap)
   .filter(c => !seenEv.has(c.eventTicker) && seenEv.add(c.eventTicker)).slice(0, S.nearMissCount);
 
 // ---- links ---------------------------------------------------------------------

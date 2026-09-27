@@ -63,6 +63,8 @@ function legFrom(m, side, series, levels) {
     name: `${m.title} — ${m.yes_sub_title || m.subtitle || m.ticker}`.replace(/\s+/g, ' ').trim(),
     pick: `On the event page, find the row “${m.yes_sub_title || m.subtitle || m.ticker}” and press “${side === 'YES' ? 'Yes' : 'No'}”.`,
     sideLabel: sub,
+    outcome: (m.yes_sub_title || m.subtitle || m.ticker || '').replace(/\s+/g, ' ').trim(), // what a YES on this contract means
+    yesBid: n(m.yes_bid_dollars),
     levels,
     feeMultiplier: series?.fee_multiplier ?? 1, feeType: series?.fee_type ?? 'quadratic',
     url: kalshiEventUrl(m.series_ticker || series?.ticker, m.event_ticker, series?.title),
@@ -130,7 +132,9 @@ export function scanEvent(ev, series, { roundTo = 0.0001 } = {}) {
   const record = (opp, cost, payoff) => {
     const gap = round6(cost - payoff);
     checks.push({ type: opp.type, id: opp.id, gap, cost: round6(cost), payoff, eventTicker: ev.event_ticker,
-      eventTitle: ev.title, label: opp.title, asset: opp.asset, url: opp.legs[0].url });
+      eventTitle: ev.title, label: opp.title, asset: opp.asset, url: opp.legs[0].url,
+      legs: opp.legs.slice(0, 8).map(l => ({ side: l.side, outcome: l.outcome, price: l.levels[0]?.price ?? null })),
+      legCount: opp.legs.length });
     if (gap < 0) opps.push(opp);
   };
 

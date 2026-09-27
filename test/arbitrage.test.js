@@ -160,3 +160,16 @@ test('verdict: locked 5% in 30 days on $500 → WORTH IT', () => {
   close(e.profitWorst, 526 * 0.05);         // $26.30
   assert.equal(e.verdict, 'WORTH IT');
 });
+
+test('every outcome of a locked trade pays at least the guaranteed amount (ladder: $1 / $2 / $1)', async () => {
+  const { scenarios } = await import('../docs/lib/format.js');
+  const ev = { event_ticker: 'EV', series_ticker: 'KXTEST', title: 'BTC', mutually_exclusive: false, markets: [
+    mk('T100', { strike_type: 'greater', floor_strike: 100000 }, { yb: 0.38, ya: 0.40 }),
+    mk('T105', { strike_type: 'greater', floor_strike: 105000 }, { yb: 0.45, ya: 0.47 }),
+  ] };
+  const lad = scanEvent(ev, series).opps.find(o => o.type === 'ladder');
+  const sc = scenarios(lad);
+  assert.deepEqual(sc.map(r => r.total), [1, 2, 1]);
+  assert.ok(sc.every(r => r.total >= lad.minPayoff));
+  assert.match(sc[0].when, /T105/);   // "Result is “T105”" (outcome = the contract's YES subtitle)
+});

@@ -2,7 +2,7 @@
 // for YOUR amount and thresholds, and renders cards. Read-only: it never logs in anywhere.
 import { evaluate, kalshiFee } from './lib/math.js';
 import { tip, escapeHtml as h } from './lib/glossary.js';
-import { money, pct, cents, legInstructions, daysText, TYPE_NAMES } from './lib/format.js';
+import { money, pct, cents, legInstructions, daysText, TYPE_NAMES, legPays, outcomeOf, scenarios, profitSource } from './lib/format.js';
 import { initChrome, store, copyText } from './lib/ui.js';
 
 const REFRESH_MS = 10 * 60 * 1000;
@@ -181,7 +181,7 @@ function card({ o, e, e100 }, stale) {
   const tb = S.data.tbill?.yieldPct;
   const legs = e.qty ? legInstructions(o, e) : [];
   const winProb = o.locked ? '100% (profits in every outcome)' : '—';
-  const bonus = o.locked && o.maxPayoff > o.minPayoff ? `${pct(o.bonusProb * 100, 0)} chance of the extra ${money((o.maxPayoff - o.minPayoff) * e.qty)} (market-implied)` : null;
+  const bonus = o.locked && o.maxPayoff > o.minPayoff && o.bonusProb >= 0.01 ? `${pct(o.bonusProb * 100, 0)} chance of the extra ${money((o.maxPayoff - o.minPayoff) * e.qty)} (market-implied)` : null;
   const perSet = o.perSet ? `${money(o.perSet.profit, 3)} profit on ${money(o.perSet.cost, 3)}` : '—';
   const per100 = e100.qty ? `${money(o.locked ? e100.profitWorst : e100.profitExpected)} (${e100.qty} sets)` : 'can\'t fill $100';
   const liquidity = e.depthLimited
@@ -229,23 +229,47 @@ function card({ o, e, e100 }, stale) {
 function whatToBuy(o, e, legs) {
   const urls = [...new Map(o.legs.map(l => [l.url, l])).values()];
   const open = urls.map(l => `<a class="btn small" href="${h(l.url)}" target="_blank" rel="noopener">Open on ${h(l.platform)} ↗</a>`).join(' ');
-  const copyBtn = l => `<button type="button" class="btn small ghost" data-copy="${h(`${l.leg.side} — ${l.leg.name} (${l.leg.ticker})`)}">Copy</button>`;
+  const copyBtn = (l, label = 'Copy') => `<button type="button" class="btn small ghost" data-copy="${h(`${l.leg.side} — ${l.leg.name} (${l.leg.ticker})`)}">${label}</button>`;
+  const source = `<div class="source"><div class="label">Where the profit comes from</div><p>${h(profitSource(o, e))}</p></div>`;
+
+  // --- the sides ---
+  let sidesHtml;
   if (legs.length <= 3) {
-    return `<div><div class="label" style="margin-bottom:6px">What to buy</div><ol class="steps">${legs.map(l => `
-      <li><b>${h(l.text)}</b> <span class="muted">Total ${money(l.cost)} incl. ${money(l.fee)} ${tip('fees', 'fees')}.</span>
-        <div class="small muted">${h(l.how)}</div>
-        <div class="leg-actions"><a class="btn small" href="${h(l.leg.url)}" target="_blank" rel="noopener">Open on ${h(l.leg.platform)} ↗</a>${copyBtn(l).replace('>Copy<', '>Copy contract name<')}</div></li>`).join('')}</ol></div>`;
+    sidesHtml = `<div class="sides">${legs.map((l, i) => `
+      <div class="side">
+        <div class="side-head"><span class="side-tag">Side ${i + 1}</span><span class="side-bet ${l.leg.side === 'YES' ? 'yes' : 'no'}">${h(l.leg.side)}</span></div>
+        <p class="side-what"><b>${h(l.text)}</b></p>
+        <p class="side-pays">→ ${h(legPays(l.leg))}.</p>
+        <p class="small muted">Costs ${money(l.cost)} incl. ${money(l.fee)} ${tip('fees', 'fees')}. ${h(l.how)}</p>
+        <div class="leg-actions"><a class="btn small" href="${h(l.leg.url)}" target="_blank" rel="noopener">Open on ${h(l.leg.platform)} ↗</a>${copyBtn(l, 'Copy contract name')}</div>
+      </div>`).join('')}</div>`;
+  } else {
+    const sides = [...new Set(o.legs.map(l => l.side))].join(' / ');
+    const title = o.legs[0].name.split(' — ')[0];
+    sidesHtml = `<p style="margin:0 0 8px"><b>Buy ${e.qty} ${h(sides)} contracts on each of these ${legs.length} rows of “${h(title)}” on ${h(o.platform)}.</b>
+      <span class="muted">Total ${money(e.cost)} incl. ${money(e.fees)} ${tip('fees', 'fees')}. On the event page, press “${sides === 'NO' ? 'No' : 'Yes'}” on each row.</span></p>
+      <div class="leg-actions" style="margin:0 0 8px">${open}</div>
+      <div class="table-wrap"><table class="legs"><thead><tr><th>Row on the event page</th><th>Side</th><th>Pays $1 if the result is…</th><th class="n">Price</th><th class="n">Cost</th><th></th></tr></thead><tbody>${
+        legs.map((l, i) => { const f = e.legFills[i]; const px = f.worstPrice != null && Math.abs(f.worstPrice - f.avgPrice) > 1e-9 ? `up to ${cents(f.worstPrice)}` : cents(f.avgPrice);
+          const pays = l.leg.side === 'YES' ? h(outcomeOf(l.leg)) : `anything except ${h(outcomeOf(l.leg))}`;
+          return `<tr><td>${h(outcomeOf(l.leg))}</td><td>${h(l.leg.side)}</td><td class="small">${pays}</td><td class="n mono">${px}</td><td class="n mono">${money(l.cost)}</td><td>${copyBtn(l)}</td></tr>`; }).join('')}
+      </tbody></table></div>`;
   }
-  const sides = [...new Set(o.legs.map(l => l.side))].join(' / ');
-  const title = o.legs[0].name.split(' — ')[0];
-  return `<div><div class="label" style="margin-bottom:6px">What to buy</div>
-    <p style="margin:0 0 8px"><b>Buy ${e.qty} ${h(sides)} contracts on each of these ${legs.length} rows of “${h(title)}” on ${h(o.platform)}.</b>
-    <span class="muted">Total ${money(e.cost)} incl. ${money(e.fees)} ${tip('fees', 'fees')}. On the event page, press “${sides === 'NO' ? 'No' : 'Yes'}” on each row.</span></p>
-    <div class="leg-actions" style="margin:0 0 8px">${open}</div>
-    <div class="table-wrap"><table class="legs"><thead><tr><th>Row on the event page</th><th>Side</th><th class="n">Price</th><th class="n">Cost</th><th></th></tr></thead><tbody>${
-      legs.map((l, i) => { const f = e.legFills[i]; const px = f.worstPrice != null && Math.abs(f.worstPrice - f.avgPrice) > 1e-9 ? `up to ${cents(f.worstPrice)}` : cents(f.avgPrice);
-        return `<tr><td>${h(l.leg.sideLabel || l.leg.ticker)}</td><td>${h(l.leg.side)}</td><td class="n mono">${px}</td><td class="n mono">${money(l.cost)}</td><td>${copyBtn(l)}</td></tr>`; }).join('')}
-    </tbody></table></div></div>`;
+
+  // --- what happens in every outcome ---
+  const sc = scenarios(o);
+  let outcomes = '';
+  if (sc.length) {
+    const perLeg = sc[0].pays && legs.length <= 3;
+    outcomes = `<div><div class="label" style="margin-bottom:6px">What you get back in every outcome</div>
+      <div class="table-wrap"><table class="legs outcomes"><thead><tr><th>If…</th>${perLeg ? legs.map((_, i) => `<th class="n">Side ${i + 1} pays</th>`).join('') : '<th>What pays</th>'}<th class="n">You get back</th><th class="n">Profit</th></tr></thead><tbody>${
+        sc.map(r => { const back = r.total * e.qty, prof = back - e.cost;
+          return `<tr><td>${h(r.when)}</td>${perLeg ? r.pays.map(p => `<td class="n mono">${money(p * e.qty)}</td>`).join('') : `<td class="small">${h(r.text)}</td>`}
+            <td class="n mono"><b>${money(back)}</b></td><td class="n mono ${prof >= 0 ? 'pos' : 'neg'}">${prof >= 0 ? '+' : ''}${money(prof)}</td></tr>`; }).join('')}
+      </tbody></table></div>
+      <p class="small muted" style="margin:6px 0 0">You paid ${money(e.cost)} in total (${e.qty} sets). Every row is a profit, which is what makes it locked in.</p></div>`;
+  }
+  return `${source}<div><div class="label" style="margin-bottom:6px">The two sides of the trade</div>${sidesHtml}</div>${outcomes}`;
 }
 
 function mathText(o, e) {
@@ -284,9 +308,13 @@ function mathText(o, e) {
 // ---------------------------------------------------------------------------
 function renderNearMisses() {
   const rows = S.data.nearMisses || [];
-  $('#near').innerHTML = rows.length ? `<div class="table-wrap"><table><thead><tr><th>Event</th><th>Check</th><th class="n">Cost of one set incl. fees</th><th class="n">Guaranteed payout</th><th class="n">Missed by</th></tr></thead><tbody>${
-    rows.map(r => `<tr><td><a href="${h(r.url)}" target="_blank" rel="noopener">${h(r.eventTitle)}</a><div class="small muted">${h(r.asset)}</div></td>
-      <td>${h(TYPE_NAMES[r.type] || r.type)}</td><td class="n mono">${money(r.cost, 4)}</td><td class="n mono">${money(r.payoff, 0)}</td>
+  const legLine = l => `<li>Buy <b>${h(l.side)}</b> on “${h(l.outcome)}” at ${cents(l.price)} → ${h(legPays(l))}</li>`;
+  $('#near').innerHTML = rows.length ? `<p class="small muted" style="margin:0 0 8px">Each row is a pair (or set) of contracts that <i>would</i> guarantee a payout. It only becomes free money when the combined cost including fees drops below that payout. Open a row to see both sides.</p>
+    <div class="table-wrap"><table><thead><tr><th>Event and the two sides</th><th class="n">Cost incl. fees</th><th class="n">Guaranteed back</th><th class="n">Short by</th></tr></thead><tbody>${
+    rows.map(r => `<tr><td><a href="${h(r.url)}" target="_blank" rel="noopener">${h(r.eventTitle)}</a> <span class="small muted">· ${h(r.asset)} · ${h(TYPE_NAMES[r.type] || r.type)}</span>
+      ${r.legs ? `<details><summary class="small">Show the ${r.legCount > 2 ? `${r.legCount} legs` : 'two sides'}</summary><ul class="near-legs">${r.legs.map(legLine).join('')}${r.legCount > r.legs.length ? `<li class="muted">…and ${r.legCount - r.legs.length} more</li>` : ''}</ul>
+        <p class="small muted" style="margin:4px 0 0">Together they cost ${money(r.cost, 4)} and always pay back at least ${money(r.payoff, 0)}, so you'd <b>lose ${(r.gap * 100).toFixed(2)}¢</b> per set. Not a trade.</p></details>` : ''}</td>
+      <td class="n mono">${money(r.cost, 4)}</td><td class="n mono">${money(r.payoff, 0)}</td>
       <td class="n mono">${(r.gap * 100).toFixed(2)}¢</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">No data.</p>';
 }
 

@@ -42,3 +42,79 @@ export const TYPE_NAMES = {
   'outcomes-no-set': 'NO set on exclusive outcomes',
   'yes-plus-no': 'YES + NO under $1',
 };
+
+// ---------------------------------------------------------------------------
+// "Both sides of the bet" explanations. Used on cards and in emails.
+// ---------------------------------------------------------------------------
+export const outcomeOf = leg => leg.outcome || leg.sideLabel || leg.ticker;
+
+/** What one leg pays, in words. */
+export function legPays(leg) {
+  const o = outcomeOf(leg);
+  return leg.side === 'YES' ? `pays $1 if the result is “${o}”` : `pays $1 if the result is anything except “${o}”`;
+}
+
+/** Every distinct outcome and what each leg pays in it (per set). */
+export function scenarios(opp) {
+  const L = opp.legs;
+  switch (opp.type) {
+    case 'ladder': {
+      const a = outcomeOf(L[0]), b = outcomeOf(L[1]);
+      return [
+        { when: `Result is “${b}”`, pays: [1, 0], total: 1 },
+        { when: `Result is “${a}” but not “${b}”`, pays: [1, 1], total: 2 },
+        { when: `Result is not “${a}”`, pays: [0, 1], total: 1 },
+      ];
+    }
+    case 'yes-plus-no': {
+      const o = outcomeOf(L[0]);
+      return [
+        { when: `Result is “${o}”`, pays: [1, 0], total: 1 },
+        { when: `Result is not “${o}”`, pays: [0, 1], total: 1 },
+      ];
+    }
+    case 'bracket-all-yes':
+      return [{ when: 'The result lands in any bracket', text: 'that bracket’s YES pays $1, every other YES pays $0', total: 1 }];
+    case 'outcomes-no-set': {
+      const k = L.length;
+      return [
+        { when: `One of these ${k} outcomes wins`, text: `its NO pays $0, your other ${k - 1} NOs pay $1 each`, total: k - 1 },
+        { when: 'Any other outcome wins, or none of them', text: `all ${k} NOs pay $1`, total: k },
+      ];
+    }
+    default:
+      return [];
+  }
+}
+
+/** One or two sentences: why the prices are inconsistent, i.e. where the money comes from. */
+export function profitSource(opp, ev) {
+  const L = opp.legs;
+  const px = L.map(l => l.levels[0]?.price ?? 0);
+  const perSet = ev.qty ? ev.cost / ev.qty : null;
+  let why = '';
+  switch (opp.type) {
+    case 'ladder': {
+      const a = outcomeOf(L[0]), b = outcomeOf(L[1]);
+      const bid = opp.violation?.narrowerYesBid ?? (1 - px[1]);
+      why = `“${b}” can only happen if “${a}” also happens, so it can never be more likely. But Kalshi prices “${b}” at ${cents(bid)} and “${a}” at only ${cents(px[0])}. ` +
+        `Buying the cheap one and betting against the expensive one covers every possible result.`;
+      break;
+    }
+    case 'bracket-all-yes':
+      why = `Exactly one of these ${L.length} brackets must win, so one YES on each is worth exactly $1. Their prices add up to ${cents(px.reduce((s, p) => s + p, 0))}, less than $1.`;
+      break;
+    case 'outcomes-no-set': {
+      const yesSum = L.reduce((s, l, i) => s + (1 - px[i]), 0);
+      why = `At most one of these outcomes can win, so their YES prices should add up to $1 or less. They add up to ${cents(yesSum)}, which makes their NO contracts too cheap.`;
+      break;
+    }
+    case 'yes-plus-no':
+      why = 'YES and NO on the same contract always pay exactly $1 together, but right now they cost less than that.';
+      break;
+  }
+  const math = perSet == null ? '' :
+    ` Each set costs ${cents(perSet)} including fees and is guaranteed to pay back at least $${opp.minPayoff}: ` +
+    `${cents(opp.minPayoff - perSet)} per set × ${ev.qty} sets = ${money(ev.profitWorst)} locked in.`;
+  return why + math;
+}
