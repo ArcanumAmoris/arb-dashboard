@@ -4,12 +4,23 @@
 # waits in the queue behind it (see concurrency in scan.yml). Result: a steady
 # 10-minute cadence even when the scheduler misbehaves. Public repos: minutes are free.
 set -u
+# Everything runs inside main(), which bash reads completely before starting, so pulling
+# a newer copy of this file mid-run is safe.
+main() {
 LOOP_MINUTES="${LOOP_MINUTES:-55}"
 END=$(( $(date +%s) + LOOP_MINUTES * 60 ))
 i=0
 while :; do
   i=$((i + 1)); start=$(date +%s)
   echo "::group::Scan $i ($(date -u +%H:%M:%SZ))"
+  # pick up code/config pushed since this run started
+  if [ "$i" -gt 1 ] && git fetch -q origin main 2>/dev/null; then
+    before=$(git rev-parse HEAD); git reset -q --hard FETCH_HEAD; after=$(git rev-parse HEAD)
+    if [ "$before" != "$after" ]; then
+      echo "Updated code to ${after:0:7}"
+      if ! git diff --quiet "$before" "$after" -- package-lock.json; then npm ci --no-audit --no-fund -q; fi
+    fi
+  fi
   mkdir -p prev/state
   rm -f prev/state/alerts.json
   if git fetch -q --depth=1 origin data 2>/dev/null; then
@@ -30,3 +41,5 @@ while :; do
   if [ "$wait_s" -gt 0 ]; then sleep "$wait_s"; fi
 done
 echo "Finished $i scans."
+}
+main "$@"; exit

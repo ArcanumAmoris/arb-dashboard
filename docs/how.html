@@ -46,13 +46,22 @@
   </div>
   <p>The scanner deliberately skips “buy YES on every outcome” for named outcomes such as “Who will acquire Pinterest?” or “When will the next recession start?”. There, it's common that <i>none</i> of the listed outcomes happens and every YES loses. On the first live scan that trap looked like a 226% “arbitrage”.</p>
 
-  <h2>2 · Kalshi vs the real market price <span class="status">coming in stage 2</span></h2>
-  <p>A Kalshi contract like “BTC above $90,000 on Friday” can be compared with what the spot price and recent volatility imply. The model assumes the log of the price moves randomly (lognormal), with volatility measured from recent prices and zero drift. Every assumption is shown on the card. This is a <b>positive expected value, can still lose</b> trade, never a locked one.</p>
+  <h2>2 · Kalshi vs listed options <span class="status">live</span></h2>
+  <p>Options on IBIT (Bitcoin), ETHA (Ethereum), GLD (gold), SLV (silver), SPX/XSP (S&amp;P 500) and NDX (Nasdaq-100) put their own price on the same events Kalshi lists, like “Bitcoin above $150,000 on Jan 1”. When the two markets disagree, you buy each side where it's cheap:</p>
+  <ul>
+    <li><b>Side 1, Kalshi:</b> the YES or NO that's too cheap. It pays $1 in its region (e.g. BTC ≤ $150k).</li>
+    <li><b>Side 2, Robinhood:</b> a <i>debit</i> option spread that pays its full width in the other region (BTC above $150k). The strikes sit slightly <i>inside</i> Side 1's region, so the two overlap instead of leaving a gap. Only debit spreads are used, so there's no margin.</li>
+  </ul>
+  <p>Sized so one spread (100 × its width in dollars) covers the same dollars of Kalshi contracts, every normal outcome pays $1 per contract. If both sides together cost less than $1, that difference is your profit.</p>
   <div class="example">
-    <p><b>Worked example.</b> BTC spot $84,455, strike $90,000, 5 days left, recent volatility 45% a year.</p>
-    <p>σ√T = 0.45 × √(5/365) = 0.0527. d₂ = [ln(84,455 / 90,000) − ½σ²T] ÷ σ√T = (−0.0636 − 0.0014) ÷ 0.0527 = −1.23. Model probability = N(−1.23) ≈ <b>10.9%</b>.</p>
-    <p>If Kalshi's YES ask is 5¢ (fee 0.33¢), expected value per contract = 10.87¢ − 5.33¢ = <b>about +5.5¢</b>. But about 89% of the time you lose your 5.33¢. It only works over many such bets, and only if the volatility estimate is right.</p>
+    <p><b>Worked example (from a live scan).</b> Kalshi's “Bitcoin $150,000 or above at the end of 2026” trades at 2.5¢, while IBIT options price it around 1.8%. IBIT is 0.0005674 BTC per share, so $150k Bitcoin ≈ IBIT $85.11.</p>
+    <p>Side 1: buy 500 Kalshi NO at 97.5¢ = $487.50 (this series has no Kalshi fee). Side 2: buy the IBIT Dec 18 $75 call and sell the $80 call for 5¢ per share = $5. The spread pays $500 once IBIT is at $80 or above (Bitcoin ≈ $141k).</p>
+    <p>Bitcoin below $150k: Kalshi pays $500. Bitcoin well above: the options pay $500. Between about $141k and $150k both pay. Cost $492.50, so <b>+$7.50 in every normal outcome</b>.</p>
+    <p><b>Why it's not locked in:</b> the options expire Dec 18 but Kalshi settles Jan 1. If Bitcoin sits under $141k on Dec 18, then jumps past $150k by New Year's, both sides lose. The simulation, using the options' own volatility, puts that at about 0.5%. Expected profit ≈ $13 over 3 months ≈ 10% a year. That's under the 14% hurdle for a can-lose trade, so it's rated <b>MARGINAL</b>.</p>
   </div>
+  <p><b>How the “options say” probability is made:</b> the live price, the options' implied volatility <i>at that strike</i> (which keeps the market's view of fat tails), no drift, measured at Kalshi's settle time. <b>How losses are estimated:</b> 20,000 simulated price paths through both dates, plus a small tracking error between the ETF and what Kalshi settles on.</p>
+  <p><b>When trades are built:</b> only while options trade (9:30am–4pm ET, weekdays). Outside those hours option prices are frozen at the last close while Kalshi and crypto keep moving, which would create fake edges. The single-bets table still runs, using live prices.</p>
+  <p><b>Best matches:</b> S&amp;P 500 and Nasdaq-100 end-of-day contracts against SPX/XSP/NDX options that expire the same day. They settle on the exact same official close, so the timing risk is zero.</p>
 
   <h2>3 · Fed and economic contracts vs futures <span class="status">coming in stage 3</span></h2>
   <p>Fed funds futures settle on the average fed funds rate for their month, so price = 100 − expected average rate. If a meeting falls partway through the month, the rate after the meeting is backed out from the days before and after it. The size of the implied move divided by 0.25 gives the probability of a quarter-point change.</p>

@@ -36,5 +36,22 @@
     "nearMissCount": 15
   },
 
+  "options": {
+    "enabled": true,
+    "feePerContract": 0,
+    "slippagePerShare": 0,
+    "publishedFeePerContract": 0.04,
+    "publishedIndexFeePerContract": 0.50,
+    "minTailEdge": 0.003,
+    "paths": 20000,
+    "maxCandidates": 25,
+    "comparisonCount": 12,
+    "maxWidthFrac": 0.08,
+    "maxGapHours": 504,
+    "minMinutesToSettle": 60,
+    "maxLossChance": 0.05,
+    "_notes": "Kalshi vs options (Robinhood). feePerContract is 0 as you asked; Robinhood's schedule (Sep 17 2026) lists $0.04/contract regulatory fee plus $0.50/contract for index options (SPX/XSP/NDX), shown on each card for comparison. slippagePerShare worsens every option fill by that many dollars per share. minTailEdge: minimum profit per $1 of payout (0.003 = 0.3 cents) before a trade is considered. maxGapHours: skip hedges whose option expiry is more than this far from Kalshi's settle time (504 = 3 weeks). maxLossChance: a can-lose trade with a higher simulated chance of loss can't be rated WORTH IT."
+  },
+
   "tbillFallbackPct": null
 }

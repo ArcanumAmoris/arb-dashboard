@@ -7,6 +7,7 @@ import { spotLinks } from '../docs/lib/links.js';
 import { scanEvent, asksFromOrderbook, topSetCost } from './detect.js';
 import * as src from './sources.js';
 import { checkLinks } from './linkcheck.js';
+import { scanOptions } from './options.js';
 
 const args = process.argv.slice(2);
 const OUT = args.includes('--out') ? args[args.indexOf('--out') + 1] : 'out';
@@ -44,10 +45,11 @@ if (crypto.errors.length) warnings.push(`Some crypto prices failed: ${crypto.err
 if (metals.errors.length) warnings.push(`Some metal prices failed: ${metals.errors.join('; ')}`);
 
 // ---- Kalshi -----------------------------------------------------------------
-let opps = [], checks = [], stats = { events: 0, markets: 0, pages: 0 }, kalshiOk = false;
+let opps = [], checks = [], stats = { events: 0, markets: 0, pages: 0 }, kalshiOk = false, allEvents = [], seriesMapAll = new Map();
 try {
   const seriesMap = await src.kalshiSeriesMap(S.categories, S.requestGapMs);
   const { events, pages } = await src.kalshiOpenEvents({ ...S, gapMs: S.requestGapMs });
+  allEvents = events; seriesMapAll = seriesMap;
   stats = { events: events.length, markets: events.reduce((s, e) => s + (e.markets?.length || 0), 0), pages, series: seriesMap.size };
   for (const ev of events) {
     const r = scanEvent(ev, seriesMap.get(ev.series_ticker), { roundTo: V.feeRoundTo });
@@ -97,6 +99,26 @@ for (const o of opps) {
 }
 results.sort((a, b) => (b.evalDefault.profitWorst ?? -1e9) - (a.evalDefault.profitWorst ?? -1e9));
 
+// ---- Stage 2: Kalshi vs listed options -------------------------------------------------
+let optionResult = { opps: [], comparisons: [], warnings: [], sources: [], optionsMarketOpen: null }, optionsOk = false;
+if (settings.options?.enabled && kalshiOk) {
+  try {
+    optionResult = await scanOptions({ events: allEvents, seriesMap: seriesMapAll, spot: { crypto: crypto.rows, metals: metals.rows },
+      settings, tbill: tb, orderbook: t => src.kalshiOrderbook(t, S.requestGapMs) });
+    optionsOk = true;
+    warnings.push(...optionResult.warnings);
+    note('cboe', 'CBOE delayed option quotes (IBIT, ETHA, GLD, SLV, SPX, XSP, NDX)', optionResult.sources.length > 0,
+      { delay: optionResult.optionsMarketOpen ? 'About 15 minutes delayed' : 'Options market closed: prices are from the last close (9:30am–4pm ET trading)',
+        detail: optionResult.sources.map(x => `${x.etf} ${x.price}`).join(' · ') });
+    results.push(...optionResult.opps);
+  } catch (e) {
+    note('cboe', 'CBOE delayed option quotes', false, { error: e.message });
+    warnings.push(`Kalshi-vs-options module failed (${e.message}); those comparisons are skipped this run.`);
+  }
+}
+const oScore = o => (o.module === 'kalshi-vs-options' ? o.evalDefault.profitExpected : o.evalDefault.profitWorst) ?? -1e9;
+results.sort((a, b) => oScore(b) - oScore(a));
+
 // near misses: the closest the market came to an arbitrage (shows the scanner is working)
 // (single-contract YES+NO sums are left out: they almost always miss by exactly one tick)
 const seenEv = new Set();
@@ -114,7 +136,7 @@ const spot = {
 let linkCheck;
 try { linkCheck = await checkLinks(results, spot); }
 catch (e) { linkCheck = { error: e.message }; warnings.push(`Link check failed to run: ${e.message}`); }
-for (const o of results) for (const leg of o.legs) {
+for (const o of results) for (const leg of (o.legs || [o.kalshi].filter(Boolean))) {
   if (linkCheck.brokenEvents?.includes(o.eventTicker)) { leg.linkBroken = true; leg.url = leg.fallbackUrl; }
 }
 
@@ -123,13 +145,14 @@ const data = {
   schema: 1,
   generatedAt: new Date().toISOString(),
   scanSeconds: Math.round((Date.now() - started) / 1000),
-  stage: 1,
-  settings: { verdict: V, staleMinutes: S.staleMinutes, alertsEnabled: settings.alerts.enabled },
+  stage: 2,
+  settings: { verdict: V, staleMinutes: S.staleMinutes, alertsEnabled: settings.alerts.enabled, options: settings.options },
   tbill, sources, warnings, stats: { ...stats, checks: checks.length, orderbooksFetched: fetched, candidates: opps.length, opportunities: results.length },
   spot, opportunities: results, nearMisses, linkCheck,
+  optionComparisons: optionResult.comparisons, optionSources: optionResult.sources, optionsMarketOpen: optionResult.optionsMarketOpen,
   modules: [
     { id: 'kalshi-consistency', name: 'Kalshi bracket / ladder consistency', status: kalshiOk ? 'live' : 'error' },
-    { id: 'kalshi-vs-spot', name: 'Kalshi vs real market price', status: 'stage 2' },
+    { id: 'kalshi-vs-options', name: 'Kalshi vs listed options (Robinhood)', status: optionsOk ? 'live' : settings.options?.enabled ? 'error' : 'off' },
     { id: 'etf-vs-metal', name: 'ETF vs actual metal price', status: 'stage 2' },
     { id: 'crypto-basis', name: 'Crypto futures basis', status: 'stage 3' },
     { id: 'fed-vs-futures', name: 'Fed & economic contracts vs futures', status: 'stage 3' },

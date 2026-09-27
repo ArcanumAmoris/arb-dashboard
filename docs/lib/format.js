@@ -118,3 +118,70 @@ export function profitSource(opp, ev) {
     `${cents(opp.minPayoff - perSet)} per set × ${ev.qty} sets = ${money(ev.profitWorst)} locked in.`;
   return why + math;
 }
+
+// ---------------------------------------------------------------------------
+// Kalshi + options (Robinhood) hedges
+// ---------------------------------------------------------------------------
+const num = (x, d = 0) => Number(x).toLocaleString('en-US', { maximumFractionDigits: d });
+const px = x => (x >= 1000 ? num(x) : num(x, 2));
+const pctP = p => (p == null ? '?' : p < 0.1 ? `${(p * 100).toFixed(1)}%` : `${(p * 100).toFixed(0)}%`);
+
+/** Where the underlying has to be for the option side to pay in full, in the underlying's own units. */
+function optionPayZone(opp) {
+  const u = opp.underlying, s = opp.spread;
+  const lvl = s.underlyingEquivalent;
+  const approx = u.index ? '' : 'about ';
+  return s.type === 'call' ? `${u.name} at ${approx}$${px(lvl)} or above` : `${u.name} at ${approx}$${px(lvl)} or below`;
+}
+
+export function optionsSides(opp, ev) {
+  const k = opp.kalshi, s = opp.spread, n = ev.spreads, nk = ev.qty;
+  const avg = ev.kalshiAvg ?? k.levels[0].price, worst = ev.kalshiWorst ?? avg;
+  const kPrice = Math.abs(worst - avg) > 1e-9 ? `at up to ${cents(worst)} each (average ${cents(avg)})` : `at ${cents(avg)} each`;
+  return [
+    { venue: 'Kalshi', side: k.side, url: k.url, copy: `${k.side} — ${k.name} (${k.ticker})`, how: k.pick,
+      text: `Buy ${nk.toLocaleString()} ${k.side} contracts of “${k.name}” on Kalshi ${kPrice}.`,
+      pays: `pays $1 each ($${num(nk)} total) if the result is ${k.region}`,
+      cost: ev.kalshiCost + ev.kalshiFee, fee: ev.kalshiFee },
+    { venue: 'Robinhood', side: s.type === 'call' ? 'CALL SPREAD' : 'PUT SPREAD', url: s.robinhoodUrl,
+      copy: `Buy ${n} ${s.legs.buy}, sell ${n} ${s.legs.sell}`, how: s.robinhoodHow,
+      text: `Buy ${n} ${s.legs.buy} at ${cents(s.buy.price)} and sell ${n} ${s.legs.sell} at ${cents(s.sell.price)}: a $${px(s.width)}-wide ${s.type} spread for ${cents(s.debit)} per share ($${num(s.debit * 100, 2)} per spread).`,
+      pays: `pays $${num(100 * s.width, 2)} per spread ($${num(nk)} total) if ${s.paysWhen} (${optionPayZone(opp)})`,
+      cost: ev.optionCost, fee: ev.fees - ev.kalshiFee },
+  ];
+}
+
+export function optionsScenarios(opp, ev) {
+  const u = opp.underlying.name, k = opp.kalshi, nk = ev.qty, s = opp.spread;
+  const K = `$${px(k.strike)}`, Z = `$${px(s.underlyingEquivalent)}`;
+  const approx = opp.underlying.index ? '' : 'about ';
+  const kalshiSide = k.paysAbove ? `above ${K}` : `at or below ${K}`;
+  const otherSide = k.paysAbove ? `at or below ${K}` : `above ${K}`;
+  const lo = k.paysAbove ? K : `${approx}${Z}`, hi = k.paysAbove ? `${approx}${Z}` : K;
+  const rows = [
+    { when: `${u} ends ${kalshiSide}`, kalshi: nk, options: 0, total: nk, note: 'Side 1 pays' },
+    { when: `${u} ends ${otherSide}`, kalshi: 0, options: nk, total: nk, note: 'Side 2 pays' },
+    { when: `${u} ends between ${lo} and ${hi}`, kalshi: nk, options: '0 to ' + num(nk), total: `${num(nk)}–${num(2 * nk)}`, note: 'both pay: bonus', bonus: true },
+  ];
+  if (opp.sim.pUnderOne > 0.0005) {
+    const gapTxt = Math.abs(opp.gapHours) > 48 ? `${Math.round(Math.abs(opp.gapHours) / 24)} days` : `${Math.round(Math.abs(opp.gapHours))} hours`;
+    const optDate = new Date(s.expiryTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const kDate = new Date(k.refTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const zoneOff = s.type === 'call' ? `below ${approx}${Z}` : `above ${approx}${Z}`;
+    let when;
+    if (Math.abs(opp.gapHours) <= 1) when = `${opp.underlying.etf} drifts away from ${u} right at the strike`;
+    else if (opp.gapHours < 0) when = `${u} is ${zoneOff} when the options expire (${optDate}), then moves ${otherSide} by Kalshi's settle (${kDate}, ${gapTxt} later)`;
+    else when = `${u} ends ${otherSide} at Kalshi's settle (${kDate}), then moves back ${zoneOff} before the options expire (${optDate}, ${gapTxt} later)`;
+    rows.push({ when, kalshi: 0, options: '0 to ' + num(nk), total: `0–${num(nk)}`, note: `timing risk: ${(opp.sim.pUnderOne * 100).toFixed(1)}% chance (simulated)`, risk: true });
+  }
+  return rows;
+}
+
+export function optionsProfitSource(opp, ev) {
+  const k = opp.kalshi, p = opp.perUnit;
+  const yesK = k.side === 'YES' ? opp.probs.kalshi : 1 - opp.probs.kalshi;
+  const yesO = opp.probs.options == null ? null : (k.side === 'YES' ? opp.probs.options : 1 - opp.probs.options);
+  return `Kalshi prices “${k.outcome}” at ${pctP(yesK)}, while ${opp.underlying.etf} options price it at ${pctP(yesO)}. ` +
+    `You buy each side where it's cheaper: Kalshi ${k.side} costs ${cents(p.kalshi)} per $1 (incl. fees) and the option spread costs ${cents(p.option)} per $1. ` +
+    `Together that's ${cents(p.total)} for a payout of $1 in every normal outcome, so ${cents(p.tailEdge)} per $1 × ${num(ev.qty)} = ${money(ev.tailProfit)} is locked in unless the timing risk hits.`;
+}

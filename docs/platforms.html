@@ -36,7 +36,7 @@
       <tr><td><b>Kalshi</b></td><td><span class="dot ok"></span>Included. CFTC-regulated exchange; non-sports markets open to NY residents.</td><td>Every Stage 1 trade (brackets, ladders, NO sets)</td><td>Taker fee 0.07 × C × P × (1−P) × series multiplier, rounded up to $0.0001 (schedule effective Jul 7 2026). No settlement fee. ACH deposits and withdrawals free; debit card deposits up to 2% (not included; use ACH).</td></tr>
       <tr><td><b>Coinbase</b></td><td><span class="dot ok"></span>Included. Licensed in New York (BitLicense).</td><td>Crypto spot reference now; cash-and-carry leg in Stage 3</td><td>Advanced Trade lowest tier: 0.60% maker / 1.20% taker. Stage 3 will use the taker rate.</td></tr>
       <tr><td><b>Gemini</b></td><td><span class="dot ok"></span>Included. New York-chartered trust company.</td><td>Crypto spot reference; alternative spot venue in Stage 3</td><td>Stage 3 will look up the current ActiveTrader schedule before using it.</td></tr>
-      <tr><td><b>Robinhood</b></td><td><span class="dot ok"></span>Included. Stocks, ETFs, options and crypto open in NY. Prediction markets open in NY for crypto, economics and finance (sports removed).</td><td>ETF legs (Stage 2); event contracts where priced differently from Kalshi</td><td>Stocks/ETFs: $0 commission, spread only. Event contracts: Robinhood commission 10% × P × (1−P), max 1¢/contract (5% with Gold), plus exchange fee up to 1¢.</td></tr>
+      <tr><td><b>Robinhood</b></td><td><span class="dot ok"></span>Included. Stocks, ETFs, options and crypto open in NY. Prediction markets open in NY for crypto, economics and finance (sports removed).</td><td>Option spreads for Kalshi-vs-options hedges (IBIT, ETHA, GLD, SLV, SPX, XSP, NDX)</td><td>Options: $0 commission. Published schedule (Sep 17 2026) also lists $0.04/contract regulatory fee and $0.50/contract for index options ($0.35 with Gold). <b>Counted as $0 at your request</b>; each card also shows the profit with those fees. Event contracts: 10% × P × (1−P) commission, max 1¢, plus exchange fee up to 1¢.</td></tr>
       <tr><td><b>Kraken</b></td><td><span class="dot err"></span>Excluded for trading. Kraken has blocked New York residents since 2015.</td><td>Price reference only (a third opinion on crypto spot)</td><td>Never used in a trade.</td></tr>
       <tr><td><b>Polymarket (international)</b></td><td><span class="dot err"></span>Excluded. Blocks US users.</td><td>Nothing</td><td>—</td></tr>
       <tr><td><b>Offshore crypto exchanges</b> (Binance.com, Bybit, OKX…)</td><td><span class="dot err"></span>Excluded. Not licensed for US/NY.</td><td>Nothing</td><td>—</td></tr>
@@ -51,6 +51,8 @@
       <tr><td>Kalshi public API</td><td>All open events, markets, order books, fee multipliers</td><td>Live at scan time; scans run every ~10 min (GitHub can run late)</td></tr>
       <tr><td>Coinbase Exchange, Gemini, Kraken public tickers</td><td>BTC, ETH, SOL, XRP, DOGE bid/ask</td><td>Live; also refreshed from your browser</td></tr>
       <tr><td>gold-api.com</td><td>Gold, silver, platinum spot</td><td>Near live (about 1 min); indicative, not a tradable quote</td></tr>
+      <tr><td>CBOE delayed option quotes</td><td>Full option chains for IBIT, ETHA, GLD, SLV, SPX, XSP, NDX</td><td>About 15 min delayed during market hours; frozen at the last close otherwise</td></tr>
+      <tr><td>Coinbase historical minute candles</td><td>Bitcoin/Ethereum price at the moment the ETF price was set, for the ETF ratio</td><td>Exact minute</td></tr>
       <tr><td>U.S. Treasury daily bill rates (FRED DTB3 backup)</td><td>13-week T-bill yield for the cash hurdle</td><td>Published each business day; up to a day old</td></tr>
     </tbody>
   </table></div>
@@ -63,6 +65,7 @@
       <li><a href="https://legalclarity.org/is-kraken-available-in-new-york-why-its-blocked/" target="_blank" rel="noopener">Kraken availability in New York</a></li>
       <li><a href="https://www.dimers.com/prediction-markets/robinhood/new-york" target="_blank" rel="noopener">Robinhood prediction markets in New York</a> and <a href="https://www.dimers.com/prediction-markets/robinhood/fees" target="_blank" rel="noopener">fees</a></li>
       <li><a href="https://cryptofeediscount.com/academy/coinbase-fees-2026/" target="_blank" rel="noopener">Coinbase Advanced fees 2026</a></li>
+      <li><a href="https://cdn.robinhood.com/assets/robinhood/legal/RHF+Fee+Schedule.pdf" target="_blank" rel="noopener">Robinhood fee schedule (Sep 17, 2026)</a></li>
       <li><a href="https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView?type=daily_treasury_bill_rates" target="_blank" rel="noopener">Treasury daily bill rates</a></li>
     </ul>
   </div>
