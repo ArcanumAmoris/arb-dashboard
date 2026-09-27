@@ -86,7 +86,7 @@ Alerts are sent from your Gmail to yourself using Gmail SMTP, which is free. Goo
 1. **Actions** tab → **Send test email** (left list) → **Run workflow** → **Run workflow**.
 2. Within a minute you should get "Arb Scanner: test email ✔". Check spam the first time and mark it "Not spam".
 
-That's it. The **Scan** workflow now runs on its own about every 10 minutes.
+That's it. The **Scan** workflow now runs on its own and refreshes the data about every 10 minutes. Pushing a change to the scanner or config also starts a scan right away.
 
 ---
 
@@ -106,7 +106,8 @@ All thresholds live in **`config/settings.json`**. On GitHub, open the file → 
 
 ## Troubleshooting
 
-- **Data is older than 10 minutes.** Normal. GitHub starts scheduled jobs late, often 5–20 minutes, sometimes more at busy times. The page shows the true age and turns red past 25 minutes.
+- **How the 10-minute refresh works.** GitHub's scheduler often starts jobs late or skips them, so each Scan run keeps scanning every 10 minutes by itself for about 55 minutes, and the next run waits in the queue. In the Actions tab you'll see one long Scan run at a time; an occasional "cancelled" run is just a spare queued run being replaced. That's normal.
+- **Data is older than 10 minutes.** Usually a slow scan or a short gap between runs. The page shows the true age and turns red past 25 minutes.
 - **Scan failed at "Publish to the data branch".** Redo step 3 (Read and write permissions).
 - **Test email failed with "Invalid login" / 535.** The app password is wrong or 2-Step Verification is off. Make a new app password and update the `GMAIL_APP_PASSWORD` secret (Settings → Secrets → pencil icon).
 - **Test email failed with "Email secrets missing".** A secret name is misspelled. The names must match exactly: `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `ALERT_TO_EMAIL`.

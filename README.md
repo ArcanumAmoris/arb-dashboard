@@ -32,7 +32,8 @@ scanner/                  runs in GitHub Actions
   linkcheck.js              flags 404s
   alerts.js alertRules.js email.js testEmail.js
 test/                     unit tests with worked examples (npm test)
-.github/workflows/        scan (every 10 min), send test email, tests
+.github/workflows/        scan (loops every 10 min), send test email, tests
+scanner/loop.sh publish.sh  the 10-minute loop and the orphan-commit publish
 ```
 
 The dashboard and the scanner import the same `docs/lib/math.js`, so a card and an email can never disagree.
