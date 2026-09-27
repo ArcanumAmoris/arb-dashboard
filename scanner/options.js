@@ -174,7 +174,8 @@ export async function scanOptions({ events, seriesMap, spot, settings, orderbook
             const dig = null;
             const cmp = { ticker: m.ticker, underlying: u.name, etf: u.etf, eventTitle: ev.title, outcome: (m.yes_sub_title || '').replace(/\s+/g, ' ').trim(), side, kalshiPrice: kPrice, kalshiFee: kFee1,
               optionsProb: pSide, ev: pSide - kPrice - kFee1, iv: sigma,
-              expiry: exp.expiry, gapHours: (exp.time - tK) / 3600000, tailEdge, url: kalshiEventUrl(ev.series_ticker, ev.event_ticker, series?.title), settles: m.close_time };
+              expiry: exp.expiry, gapHours: (exp.time - tK) / 3600000, tailEdge, url: kalshiEventUrl(ev.series_ticker, ev.event_ticker, series?.title), settles: m.close_time,
+              paysAbove, strike: K, hedge: describeSpread(u, exp, spread, ref.ratio), hedgeTotalPerDollar: perUnit };
             comparisons.push(cmp);
             if (!buildTrades || tailEdge < O.minTailEdge || Math.abs(exp.time - tK) > O.maxGapHours * 3600000) continue;
             const sim = simulateUnit({ s0: ref.s0, strikeK: K, kalshiPaysAbove: paysAbove, ratio: ref.ratio, spread, sigma,
@@ -236,6 +237,27 @@ export async function scanOptions({ events, seriesMap, spot, settings, orderbook
   return { opps: picked, comparisons: topComparisons, warnings, sources, optionsMarketOpen: open, tradesBuilt: buildTrades };
 }
 
+/** Plain-English description of an option spread, shared by trade cards and the single-bet rows. */
+export function describeSpread(u, exp, spread, ratio) {
+  const optLabel = `${u.etf} ${fmtDate(exp.expiry)}`;
+  const kind = spread.type === 'call' ? 'call' : 'put';
+  const zone = spread.type === 'call' ? spread.k2 : spread.k1;
+  const approx = u.index ? '' : 'about ';
+  return {
+    type: spread.type, expiry: exp.expiry, expiryTime: new Date(exp.time).toISOString(), root: exp.root,
+    k1: spread.k1, k2: spread.k2, width: spread.width, debit: spread.debit, perUnit: spread.perUnit, maxSpreads: spread.maxSpreads,
+    buy: { ...spread.buy, label: `${optLabel} $${fmtK(spread.buy.strike)} ${kind}` },
+    sell: { ...spread.sell, label: `${optLabel} $${fmtK(spread.sell.strike)} ${kind}` },
+    legs: { buy: `${optLabel} $${fmtK(spread.buy.strike)} ${kind}`, sell: `${optLabel} $${fmtK(spread.sell.strike)} ${kind}` },
+    paysWhen: spread.type === 'call' ? `${u.etf} ends at or above $${fmtK(zone)}` : `${u.etf} ends at or below $${fmtK(zone)}`,
+    underlyingEquivalent: zone / ratio,
+    underlyingZone: `${u.name} ${spread.type === 'call' ? 'at' : 'at'} ${approx}$${fmtK(zone / ratio)} or ${spread.type === 'call' ? 'above' : 'below'}`,
+    kalshiPerSpread: Math.round(100 * spread.width),
+    robinhoodUrl: u.index ? 'https://robinhood.com/' : spotLinks.robinhoodStock(u.etf),
+    robinhoodHow: `${u.index ? `In the Robinhood app, search “${u.etf}”` : `Open ${u.etf} on Robinhood`} → Trade → Trade options → Strategy builder → vertical spread. Pick the ${fmtDate(exp.expiry)} expiration, buy the $${fmtK(spread.buy.strike)} ${kind} and sell the $${fmtK(spread.sell.strike)} ${kind}, set a limit price of about $${spread.debit.toFixed(2)}.`,
+  };
+}
+
 function buildOpp({ u, ev, m, series, side, levels, paysAbove, K, X, ref, chain, open, tK, now, settings, exp, spread, perUnit, tailEdge, sim, sigma, pSide, dig, tauO, tauK, expUnit }) {
   const outcome = (m.yes_sub_title || m.subtitle || m.ticker).replace(/\s+/g, ' ').trim();
   const kalshiRegion = side === 'YES' ? `“${outcome}”` : `anything except “${outcome}”`;
@@ -263,13 +285,7 @@ function buildOpp({ u, ev, m, series, side, levels, paysAbove, K, X, ref, chain,
       url: kalshiEventUrl(ev.series_ticker, ev.event_ticker, series?.title), fallbackUrl: kalshiSeriesUrl(ev.series_ticker),
       refTime: m.close_time, volume24h: Number(m.volume_24h_fp) || 0,
     },
-    spread: { ...spread, root: exp.root, expiry: exp.expiry, expiryTime: new Date(exp.time).toISOString(), legs,
-      etfStrikeEdge: X, paysWhen: spread.type === 'call' ? `${u.etf} ends at or above $${fmtK(spread.k2)}` : `${u.etf} ends at or below $${fmtK(spread.k1)}`,
-      underlyingEquivalent: spread.type === 'call' ? spread.k2 / ref.ratio : spread.k1 / ref.ratio,
-      robinhoodUrl: u.index ? 'https://robinhood.com/' : spotLinks.robinhoodStock(u.etf),
-      robinhoodHow: u.index
-        ? `In the Robinhood app, search “${u.etf}”, tap Trade → Trade Options, pick the ${fmtDate(exp.expiry)} expiration, then build the spread.`
-        : `On the ${u.etf} page tap Trade → Trade Options, pick the ${fmtDate(exp.expiry)} expiration, then build the spread.` },
+    spread: { ...describeSpread(u, exp, spread, ref.ratio), etfStrikeEdge: X },
     gapHours: (exp.time - tK) / 3600000,
     probs: { kalshi: levels[0].price, options: pSide, iv: sigma },
     perUnit: { kalshi: round6(perUnit - spread.perUnit), option: round6(spread.perUnit), total: round6(perUnit), tailEdge: round6(tailEdge), expected: round6(expUnit) },

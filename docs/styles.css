@@ -205,3 +205,18 @@ td.pos { color: var(--good); } td.neg { color: var(--bad); }
 table.outcomes td { vertical-align: top; }
 .near-legs { margin: 6px 0 0; padding-left: 1.1em; font-size: 0.84rem; }
 .near-legs li { margin: 2px 0; }
+
+/* Kalshi vs options single bets */
+.bets { display: grid; gap: 12px; }
+.bet { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 10px; }
+.bet-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.bet-probs { display: flex; gap: 14px; font-size: 0.9rem; white-space: nowrap; }
+.bet-probs b { font-family: var(--font-display); font-size: 1.15rem; }
+.bet-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.bet-steps li { border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; display: grid; gap: 4px; }
+.bet-steps li:nth-child(2) { border-left-color: var(--line); }
+.step-tag { font: 700 0.72rem var(--font-body); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+.bet-result { background: var(--surface-2); border-radius: 8px; padding: 8px 12px; display: grid; gap: 4px; font-size: 0.9rem; }
+.bet-result .pos { color: var(--good); }
+details.howto > summary { cursor: pointer; font-weight: 600; }
+details.howto { margin-bottom: 12px; }
