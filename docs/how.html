@@ -63,7 +63,21 @@
   <p><b>When trades are built:</b> only while options trade (9:30am–4pm ET, weekdays). Outside those hours option prices are frozen at the last close while Kalshi and crypto keep moving, which would create fake edges. The single-bets table still runs, using live prices.</p>
   <p><b>Best matches:</b> S&amp;P 500 and Nasdaq-100 end-of-day contracts against SPX/XSP/NDX options that expire the same day. They settle on the exact same official close, so the timing risk is zero.</p>
 
-  <h2>3 · Fed and economic contracts vs futures <span class="status">coming in stage 3</span></h2>
+  <h2>3 · Kalshi vs Polymarket US <span class="status">live</span></h2>
+  <p>Polymarket US (polymarket.us) is a separate, CFTC-regulated exchange from the offshore polymarket.com — it's legal and open to NY residents, and it lists the same kind of year-end BTC/ETH price brackets Kalshi does. The check is the same ladder logic as section 1, just run across two venues instead of within one: if a Polymarket bracket sits strictly inside a Kalshi range (or vice versa), buying the wide side's YES and the narrow side's NO always pays at least $1.</p>
+  <p><b>Why this one is treated more cautiously than section 1.</b> Two venues can each be internally consistent and still disagree with each other, for two separate reasons this scanner checks before ever calling a pairing "locked":</p>
+  <ul>
+    <li><b>Same settlement index and method?</b> Both platforms' own contract text is pulled and diffed. As of this writing, Polymarket's BTC year-end brackets settle on a <i>trimmed</i>-mean average of the CF Benchmarks BRTI (excluding the top/bottom 20%), while Kalshi's documented methodology is a plain, untrimmed average of the same index. Same index family, different math — a real discrepancy, not a hypothetical one.</li>
+    <li><b>Same settlement instant?</b> Even same-index contracts can measure at different moments. The scanner parses each platform's stated settlement time and skips the pairing entirely if the two are more than 3 days apart (that's not basis risk, it's comparing two different questions) and only calls a pairing genuinely locked when they land within about 3 hours of each other.</li>
+  </ul>
+  <p>Short of both checks passing, a mispriced-looking pair is shown as positive expected value that can still lose to a settlement mismatch — the same honesty the Kalshi-vs-options module (section 2) already applies to timing gaps between Kalshi and option expiries.</p>
+  <div class="example">
+    <p><b>Worked example (from a live scan).</b> Both platforms list a BTC "$19,999.99 or below" year-end bracket. Kalshi's is under 1¢; Polymarket's NO is priced at 99¢, so YES-Kalshi + NO-Polymarket costs about 99.7¢ for a $1 payout.</p>
+    <p>That looks like a lock, but Polymarket's own market description states a trimmed-mean BRTI settlement while Kalshi's is untrimmed — the same real discrepancy above. So the card shows the trade as <b>can-lose, not locked</b>, even though the settlement instants themselves line up to within a few hours.</p>
+  </div>
+  <p>Order-book depth from both platforms is pulled before sizing any trade, and the fillable size shown is the thinner of the two books — a locked-looking price at the top of book means nothing if only one contract is actually resting there.</p>
+
+  <h2>4 · Fed and economic contracts vs futures <span class="status">coming in stage 3</span></h2>
   <p>Fed funds futures settle on the average fed funds rate for their month, so price = 100 − expected average rate. If a meeting falls partway through the month, the rate after the meeting is backed out from the days before and after it. The size of the implied move divided by 0.25 gives the probability of a quarter-point change.</p>
   <div class="example">
     <p><b>Worked example.</b> The rate is 3.58% today. The December meeting is on the 9th: 9 days at the old rate, 22 at the new one. The December future trades at 96.50, so the expected December average is 3.50%.</p>
@@ -71,21 +85,21 @@
     <p>Honest caveat for stage 3: live fed funds futures quotes aren't reliably free. If no free source supports this calculation properly, the module will say “limited data” rather than show fake precision.</p>
   </div>
 
-  <h2>4 · Crypto futures basis (cash-and-carry) <span class="status">coming in stage 3</span></h2>
+  <h2>5 · Crypto futures basis (cash-and-carry) <span class="status">coming in stage 3</span></h2>
   <p>When a crypto future trades above spot, you can buy the coin and sell the future. At expiry they converge and you keep the gap. It's close to locked, but not fully: the short future needs <b>margin</b>, and if the price spikes the broker can demand more cash or <b>liquidate</b> your short. That breaks the hedge at the worst moment.</p>
   <div class="example">
     <p><b>Worked example.</b> BTC spot $84,000, December future $85,500, 90 days to expiry. The gap is 1.79%, which looks like 7.2% a year.</p>
     <p>Now the costs: Coinbase Advanced charges 1.20% to take liquidity at the lowest volume tier, plus futures fees and the cost of cash parked as margin. Net ≈ 0.5% over 90 days ≈ <b>2% a year: less than T-bills. NOT WORTH IT</b>, even though the headline looked good.</p>
   </div>
 
-  <h2>5 · Metal ETFs vs the actual metal <span class="status">coming in stage 2</span></h2>
+  <h2>6 · Metal ETFs vs the actual metal <span class="status">coming in stage 2</span></h2>
   <p>GLD and SLV hold physical metal. Big institutions can create or redeem shares for metal whenever the price drifts, which keeps the gap to a few hundredths of a percent. Closed-end trusts like PHYS and PSLV can't be redeemed as easily, so they can trade at real premiums or discounts for months.</p>
   <div class="example">
     <p><b>Worked example.</b> A GLD share holds about 0.09 oz of gold (the fund publishes the exact figure daily). With gold at $4,286, the metal behind a share is worth about $393. A 0.1% gap is noise, not a trade.</p>
     <p>If PSLV trades 3% below the value of its silver, buying it is a <b>discount trade, not arbitrage: it may not close</b>. NAV is published once a day, so the comparison can lag by up to a trading day.</p>
   </div>
 
-  <h2>6 · Cash-hurdle comparison <span class="status">live, on every card</span></h2>
+  <h2>7 · Cash-hurdle comparison <span class="status">live, on every card</span></h2>
   <p>Money tied up in a trade could be earning the T-bill rate with no effort and no risk. So every opportunity is annualized (return × 365 ÷ days held) and compared with the current 3-month T-bill yield plus a margin: 1 point for locked trades, 10 points for can-still-lose trades (you can change these). Fall short and the card says NOT WORTH IT, however good the raw percentage looks.</p>
   <div class="example">
     <p><b>Worked example, from the first live scan.</b> Ethereum's year-end brackets could be bought for 96.8¢ a set. They pay exactly $1, and the series has zero fees. Only 44 sets were available at profitable prices, for $0.50 of guaranteed profit.</p>

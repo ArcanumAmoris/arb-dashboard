@@ -53,5 +53,11 @@
     "_notes": "Kalshi vs options (Robinhood). feePerContract is 0 as you asked; Robinhood's schedule (Sep 17 2026) lists $0.04/contract regulatory fee plus $0.50/contract for index options (SPX/XSP/NDX), shown on each card for comparison. slippagePerShare worsens every option fill by that many dollars per share. minTailEdge: minimum profit per $1 of payout (0.003 = 0.3 cents) before a trade is considered. maxGapHours: skip hedges whose option expiry is more than this far from Kalshi's settle time (504 = 3 weeks). maxLossChance: a can-lose trade with a higher simulated chance of loss can't be rated WORTH IT."
   },
 
+  "polymarket": {
+    "enabled": true,
+    "maxCandidates": 20,
+    "_notes": "Kalshi vs Polymarket US (polymarket.us, the CFTC-regulated US entity — never the offshore polymarket.com). Compares BTC/ETH year-end price-bracket ladders across the two venues using the same subset-interval math as the Kalshi-internal ladder check. A pairing is only ever rated locked-in (not just positive-EV) once both platforms' own contract text confirms the same settlement index AND the same averaging method; Polymarket's BTC brackets currently describe a trimmed-mean BRTI while Kalshi's is untrimmed, so BTC pairings are basis risk today even when the prices look mispriced. maxCandidates caps how many top-of-book candidates get re-priced against full order books on both venues per scan."
+  },
+
   "tbillFallbackPct": null
 }

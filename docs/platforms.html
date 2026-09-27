@@ -38,7 +38,8 @@
       <tr><td><b>Gemini</b></td><td><span class="dot ok"></span>Included. New York-chartered trust company.</td><td>Crypto spot reference; alternative spot venue in Stage 3</td><td>Stage 3 will look up the current ActiveTrader schedule before using it.</td></tr>
       <tr><td><b>Robinhood</b></td><td><span class="dot ok"></span>Included. Stocks, ETFs, options and crypto open in NY. Prediction markets open in NY for crypto, economics and finance (sports removed).</td><td>Option spreads for Kalshi-vs-options hedges (IBIT, ETHA, GLD, SLV, SPX, XSP, NDX)</td><td>Options: $0 commission. Published schedule (Sep 17 2026) also lists $0.04/contract regulatory fee and $0.50/contract for index options ($0.35 with Gold). <b>Counted as $0 at your request</b>; each card also shows the profit with those fees. Event contracts: 10% × P × (1−P) commission, max 1¢, plus exchange fee up to 1¢.</td></tr>
       <tr><td><b>Kraken</b></td><td><span class="dot err"></span>Excluded for trading. Kraken has blocked New York residents since 2015.</td><td>Price reference only (a third opinion on crypto spot)</td><td>Never used in a trade.</td></tr>
-      <tr><td><b>Polymarket (international)</b></td><td><span class="dot err"></span>Excluded. Blocks US users.</td><td>Nothing</td><td>—</td></tr>
+      <tr><td><b>Polymarket US</b> (polymarket.us)</td><td><span class="dot ok"></span>Included. A CFTC-regulated Designated Contract Market operated by QCX LLC — a separate legal entity from offshore Polymarket, not geoblocked in NY.</td><td>Kalshi-vs-Polymarket US ladder comparisons (BTC/ETH year-end price brackets)</td><td>Taker fee 0.0695 × C × P × (1−P) (maker gets a −0.0125 rebate); this dashboard always assumes taking. Reused via Kalshi's own fee formula with an equivalent multiplier.</td></tr>
+      <tr><td><b>Polymarket</b> (offshore, polymarket.com)</td><td><span class="dot err"></span>Excluded. Blocks US users. Not the same company as Polymarket US.</td><td>Nothing</td><td>—</td></tr>
       <tr><td><b>Offshore crypto exchanges</b> (Binance.com, Bybit, OKX…)</td><td><span class="dot err"></span>Excluded. Not licensed for US/NY.</td><td>Nothing</td><td>—</td></tr>
       <tr><td><b>Coinbase Derivatives</b> (US futures)</td><td><span class="dot"></span>To be verified in Stage 3 for NY access and free data.</td><td>Short futures leg for cash-and-carry</td><td>If NY access or free data can't be confirmed, the module will show as unavailable.</td></tr>
     </tbody>
@@ -52,6 +53,7 @@
       <tr><td>Coinbase Exchange, Gemini, Kraken public tickers</td><td>BTC, ETH, SOL, XRP, DOGE bid/ask</td><td>Live; also refreshed from your browser</td></tr>
       <tr><td>gold-api.com</td><td>Gold, silver, platinum spot</td><td>Near live (about 1 min); indicative, not a tradable quote</td></tr>
       <tr><td>CBOE delayed option quotes</td><td>Full option chains for IBIT, ETHA, GLD, SLV, SPX, XSP, NDX</td><td>About 15 min delayed during market hours; frozen at the last close otherwise</td></tr>
+      <tr><td>Polymarket US public API (gateway.polymarket.us)</td><td>BTC/ETH year-end bracket markets and order books</td><td>Live at scan time; no key needed</td></tr>
       <tr><td>Coinbase historical minute candles</td><td>Bitcoin/Ethereum price at the moment the ETF price was set, for the ETF ratio</td><td>Exact minute</td></tr>
       <tr><td>U.S. Treasury daily bill rates (FRED DTB3 backup)</td><td>13-week T-bill yield for the cash hurdle</td><td>Published each business day; up to a day old</td></tr>
     </tbody>
@@ -67,6 +69,7 @@
       <li><a href="https://cryptofeediscount.com/academy/coinbase-fees-2026/" target="_blank" rel="noopener">Coinbase Advanced fees 2026</a></li>
       <li><a href="https://cdn.robinhood.com/assets/robinhood/legal/RHF+Fee+Schedule.pdf" target="_blank" rel="noopener">Robinhood fee schedule (Sep 17, 2026)</a></li>
       <li><a href="https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView?type=daily_treasury_bill_rates" target="_blank" rel="noopener">Treasury daily bill rates</a></li>
+      <li><a href="https://docs.polymarket.us/fees" target="_blank" rel="noopener">Polymarket US fee schedule</a></li>
     </ul>
   </div>
 </main>

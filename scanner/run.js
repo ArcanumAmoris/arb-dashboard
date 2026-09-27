@@ -8,6 +8,7 @@ import { scanEvent, asksFromOrderbook, topSetCost } from './detect.js';
 import * as src from './sources.js';
 import { checkLinks } from './linkcheck.js';
 import { scanOptions } from './options.js';
+import { scanPolymarket } from './polymarket.js';
 
 const args = process.argv.slice(2);
 const OUT = args.includes('--out') ? args[args.indexOf('--out') + 1] : 'out';
@@ -116,6 +117,35 @@ if (settings.options?.enabled && kalshiOk) {
     warnings.push(`Kalshi-vs-options module failed (${e.message}); those comparisons are skipped this run.`);
   }
 }
+// ---- Stage 3: Kalshi vs Polymarket US -------------------------------------------------
+let pmResult = { opps: [], warnings: [], sources: [] }, pmOk = false;
+if (settings.polymarket?.enabled && kalshiOk) {
+  try {
+    pmResult = await scanPolymarket({ kalshiEvents: allEvents, seriesMap: seriesMapAll, settings, now,
+      kalshiOrderbook: t => src.kalshiOrderbook(t, S.requestGapMs) });
+    pmOk = true;
+    warnings.push(...pmResult.warnings);
+    note('polymarket', 'Polymarket US public market data API (gateway.polymarket.us)', pmResult.sources.length > 0,
+      { delay: 'Real time at scan time', detail: pmResult.sources.map(x => `${x.count} crypto markets`).join(' · ') });
+    for (const o of pmResult.opps) {
+      const c1 = topSetCost(o.legs, V.feeRoundTo);
+      if (c1 == null || c1 >= (o.locked ? o.minPayoff : o.expectedPayoffPerSet)) continue; // gone after full book
+      o.perSet = { cost: c1, profit: round6((o.locked ? o.minPayoff : o.expectedPayoffPerSet) - c1) };
+      const at100 = evaluate(o, 100, tb, V, now);
+      const atDefault = evaluate(o, V.defaultAmount, tb, V, now);
+      const atMax = evaluate(o, 1e9, tb, V, now);
+      o.eval100 = slim(at100); o.evalDefault = slim(atDefault);
+      o.fillableDollars = atMax.qty ? round6(atMax.cost) : 0;
+      o.fillableSets = atMax.qty || 0;
+      o.confidence = confidence(o, atDefault, now);
+      results.push(o);
+    }
+  } catch (e) {
+    note('polymarket', 'Polymarket US public market data API', false, { error: e.message });
+    warnings.push(`Kalshi-vs-Polymarket module failed (${e.message}); those comparisons are skipped this run.`);
+  }
+}
+
 const oScore = o => (o.module === 'kalshi-vs-options' ? o.evalDefault.profitExpected : o.evalDefault.profitWorst) ?? -1e9;
 results.sort((a, b) => oScore(b) - oScore(a));
 
@@ -146,13 +176,14 @@ const data = {
   generatedAt: new Date().toISOString(),
   scanSeconds: Math.round((Date.now() - started) / 1000),
   stage: 2,
-  settings: { verdict: V, staleMinutes: S.staleMinutes, alertsEnabled: settings.alerts.enabled, options: settings.options },
+  settings: { verdict: V, staleMinutes: S.staleMinutes, alertsEnabled: settings.alerts.enabled, options: settings.options, polymarket: settings.polymarket },
   tbill, sources, warnings, stats: { ...stats, checks: checks.length, orderbooksFetched: fetched, candidates: opps.length, opportunities: results.length },
   spot, opportunities: results, nearMisses, linkCheck,
   optionComparisons: optionResult.comparisons, optionSources: optionResult.sources, optionsMarketOpen: optionResult.optionsMarketOpen,
   modules: [
     { id: 'kalshi-consistency', name: 'Kalshi bracket / ladder consistency', status: kalshiOk ? 'live' : 'error' },
     { id: 'kalshi-vs-options', name: 'Kalshi vs listed options (Robinhood)', status: optionsOk ? 'live' : settings.options?.enabled ? 'error' : 'off' },
+    { id: 'kalshi-vs-polymarket', name: 'Kalshi vs Polymarket US', status: pmOk ? 'live' : settings.polymarket?.enabled ? 'error' : 'off' },
     { id: 'etf-vs-metal', name: 'ETF vs actual metal price', status: 'stage 2' },
     { id: 'crypto-basis', name: 'Crypto futures basis', status: 'stage 3' },
     { id: 'fed-vs-futures', name: 'Fed & economic contracts vs futures', status: 'stage 3' },

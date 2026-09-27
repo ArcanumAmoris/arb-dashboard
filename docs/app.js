@@ -1,9 +1,9 @@
 // Dashboard: loads data.json from the `data` branch, re-scores every opportunity
 // for YOUR amount and thresholds, and renders cards. Read-only: it never logs in anywhere.
-import { evaluate, kalshiFee, fillCost } from './lib/math.js';
+import { evaluate, fillCost } from './lib/math.js';
 import { evaluateOptionsTrade } from './lib/options.js';
-import { tip, escapeHtml as h } from './lib/glossary.js';
-import { money, pct, cents, legInstructions, daysText, TYPE_NAMES, legPays, outcomeOf, scenarios, profitSource, optionsSides, optionsScenarios, optionsProfitSource } from './lib/format.js';
+import { escapeHtml as h } from './lib/glossary.js';
+import { money, pct, cents, legInstructions, TYPE_NAMES, legPays } from './lib/format.js';
 import { initChrome, store, copyText } from './lib/ui.js';
 
 const REFRESH_MS = 10 * 60 * 1000;
@@ -186,135 +186,67 @@ function renderCards() {
     `The “Closest calls” table below shows how near the market came.</p></div>`;
 }
 
+const VERDICT_LABEL = { 'WORTH IT': 'Worth it', 'MARGINAL': 'Marginal', 'NOT WORTH IT': 'Not worth it' };
+const VCLS = { 'WORTH IT': 'worth', 'MARGINAL': 'marginal', 'NOT WORTH IT': 'not' };
+
+/** Normalizes either trade type into the boxes the minimal card renders: N legs, a cost, a profit figure. */
+function legBoxesFor(o, e) {
+  if (!e.qty) return [];
+  if (isOpt(o)) {
+    const k = o.kalshi, s = o.spread;
+    return [
+      { side: k.side, cls: k.side === 'YES' ? 'yes' : 'no', name: k.name, qtyText: `${e.qty.toLocaleString()} contracts`, cost: e.kalshiCost + e.kalshiFee, url: k.url, platform: 'Kalshi' },
+      { side: s.type === 'call' ? 'CALL SPREAD' : 'PUT SPREAD', cls: 'spread', name: `${s.legs.buy} / ${s.legs.sell}`, qtyText: `${e.spreads} spread${e.spreads === 1 ? '' : 's'}`, cost: e.optionCost, url: s.robinhoodUrl, platform: 'Robinhood' },
+    ];
+  }
+  return legInstructions(o, e).map(l => ({ side: l.leg.side, cls: l.leg.side === 'YES' ? 'yes' : 'no', name: l.leg.name, qtyText: `${e.qty.toLocaleString()} contracts`, cost: l.cost, url: l.leg.url, platform: l.leg.platform }));
+}
+
+function cardMeta(o, e) {
+  const opt = isOpt(o);
+  const subtype = opt ? `Kalshi vs ${o.underlying.etf} options`
+    : o.module === 'kalshi-polymarket' ? `Kalshi vs Polymarket US — ${TYPE_NAMES[o.type] || o.type}`
+    : (TYPE_NAMES[o.type] || o.type);
+  const settle = new Date(opt ? o.holdUntil : o.settleTime);
+  let profit, hasFloor;
+  if (opt) { profit = e.qty ? e.tailProfit : null; hasFloor = false; }
+  else { profit = e.qty ? (o.locked ? e.profitWorst : e.profitExpected) : null; hasFloor = o.locked && o.maxPayoff > o.minPayoff && o.bonusProb >= 0.01; }
+  const riskWhy = `${e.verdictWhy} ${o.riskLabel}. Confidence: ${o.confidence.level}${o.confidence.why.length ? ` (${o.confidence.why.join('; ')})` : ''}.`;
+  return { subtype, settle, profit, hasFloor, riskWhy, locked: !!o.locked && !opt };
+}
+
 function card({ o, e, e100 }, stale) {
-  if (isOpt(o)) return optionsCard({ o, e, e100 }, stale);
-  const vcls = { 'WORTH IT': 'worth', 'MARGINAL': 'marginal', 'NOT WORTH IT': 'not' }[e.verdict];
-  const profit = o.locked ? e.profitWorst : e.profitExpected;
-  const tb = S.data.tbill?.yieldPct;
-  const legs = e.qty ? legInstructions(o, e) : [];
-  const winProb = o.locked ? '100% (profits in every outcome)' : '—';
-  const bonus = o.locked && o.maxPayoff > o.minPayoff && o.bonusProb >= 0.01 ? `${pct(o.bonusProb * 100, 0)} chance of the extra ${money((o.maxPayoff - o.minPayoff) * e.qty)} (market-implied)` : null;
-  const perSet = o.perSet ? `${money(o.perSet.profit, 3)} profit on ${money(o.perSet.cost, 3)}` : '—';
-  const per100 = e100.qty ? `${money(o.locked ? e100.profitWorst : e100.profitExpected)} (${e100.qty} sets)` : 'can\'t fill $100';
-  const liquidity = e.depthLimited
-    ? `Order books only have ${e.maxDepth.toLocaleString()} profitable sets, so the size is cut to ${e.qty} sets (${money(e.cost)}) instead of your ${money(S.amount, 0)}.`
-    : `Enough depth: ${e.qty} sets fill at the prices shown. Profitable depth tops out around ${money(o.fillableDollars)}.`;
-  const settle = new Date(o.settleTime);
-  return `<article class="card v-${vcls}${stale ? ' stale-card' : ''}">
-    <div class="chips">
-      <span class="chip verdict ${vcls}">${e.verdict}</span>
-      <span class="chip ${o.locked ? 'locked' : ''}">${tip(o.locked ? 'locked-in arbitrage' : 'positive expected value', h(o.riskLabel))}</span>
-      <span class="chip">${h(o.asset)}</span>
-      <span class="chip">${tip('confidence', `confidence: ${h(o.confidence.level)}`)}</span>
-      ${stale ? '<span class="chip gone">may no longer exist</span>' : ''}
+  const vcls = VCLS[e.verdict];
+  const m = cardMeta(o, e);
+  const boxes = legBoxesFor(o, e);
+  const expiry = m.settle.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  return `<details class="ocard${stale ? ' stale-card' : ''}">
+    <summary class="ocard-head">
+      <span class="ocard-chev">▸</span>
+      <div class="ocard-left">
+        <div class="ocard-title">${h(o.title)}</div>
+        <div class="ocard-sub">${h(m.subtype)} · <b class="ocard-expiry mono">${h(expiry)}</b></div>
+        <span class="vpill ${vcls}">${VERDICT_LABEL[e.verdict]}${stale ? ' · may no longer exist' : ''}<button type="button" class="tip" aria-label="Why this verdict" data-tip="${h(m.riskWhy)}">?</button></span>
+      </div>
+      <div class="ocard-right">
+        <div class="ocard-apy mono">${e.annualizedPct == null ? '—' : pct(e.annualizedPct, 1)}</div>
+        <div class="ocard-apy-label">per yr, if held</div>
+      </div>
+    </summary>
+    <div class="ocard-body">
+      ${boxes.length ? `<div class="ocard-legs">${boxes.map(b => `
+        <div class="legbox">
+          <div class="legbox-top"><span class="side-bet ${b.cls}">${h(b.side)}</span><span class="small muted">${h(b.qtyText)}</span></div>
+          <div class="legbox-name">${h(b.name)}</div>
+          <div class="legbox-cost mono">${money(b.cost)}</div>
+        </div>`).join('')}</div>` : `<div class="notice warn">Can't build a trade at ${money(S.amount, 0)}.</div>`}
+      ${boxes.length ? `<div class="ocard-stats">
+        <div><span class="label">Total cost</span><span class="v mono">${money(e.cost)}</span></div>
+        <div><span class="label">Profit</span><span class="v mono pos">${money(m.profit)}${m.hasFloor ? '+' : ''}</span></div>
+      </div>
+      <div class="ocard-links">${[...new Map(boxes.map(b => [b.url, b])).values()].map(b => `<a class="btn small" href="${h(b.url)}" target="_blank" rel="noopener">Open on ${h(b.platform)} ↗</a>`).join('')}</div>` : ''}
     </div>
-    <div>
-      <div class="label">${h(TYPE_NAMES[o.type] || o.type)} · ${h(o.platform)}</div>
-      <h3>${h(o.title)}</h3>
-      <p class="small muted" style="margin:4px 0 0">${h(e.verdictWhy)}</p>
-    </div>
-    <div class="kpis">
-      <div class="kpi"><span class="label">${o.locked ? tip('worst case', 'Profit (worst case)') : 'Expected profit'}</span><span class="v ${profit > 0 ? 'pos' : 'neg'}">${money(profit)}</span></div>
-      <div class="kpi"><span class="label">Return</span><span class="v">${pct(e.returnPct)}</span></div>
-      <div class="kpi"><span class="label">${tip('annualized return', 'Per year')}</span><span class="v">${pct(e.annualizedPct, 1)}</span><span class="small muted">vs ${tip('t-bill rate', `T-bill ${pct(tb)}`)}</span></div>
-    </div>
-    ${e.qty ? whatToBuy(o, e, legs) : `<div class="notice warn">Can't build a trade at this amount.</div>`}
-    <dl class="stats">
-      <dt>Total cost</dt><dd><b>${money(e.cost)}</b> incl. ${money(e.fees)} fees</dd>
-      <dt>Win probability</dt><dd>${winProb}</dd>
-      ${bonus ? `<dt>Upside</dt><dd>${bonus}</dd>` : ''}
-      <dt>Best / worst case</dt><dd>${money(e.profitBest)} / ${money(e.profitWorst)}</dd>
-      <dt>${tip('max loss', 'Max loss')}</dt><dd>${money(e.maxLoss)}${o.locked ? ' (market risk only; see note)' : ''}</dd>
-      ${o.locked && o.maxPayoff > o.minPayoff ? `<dt>Expected profit</dt><dd>${money(e.profitExpected)}</dd>` : ''}
-      <dt>Per contract set</dt><dd>${perSet}</dd>
-      <dt>Per $100</dt><dd>${per100}</dd>
-      <dt>${tip('order book depth', 'Liquidity')}</dt><dd>${h(liquidity)}</dd>
-      <dt>${tip('settlement', 'Settles')}</dt><dd>${settle.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} · money tied up ${daysText(e.days)}</dd>
-      <dt>Confidence</dt><dd>${h(o.confidence.level)}${o.confidence.why.length ? ` — ${h(o.confidence.why.join('; '))}` : ''}</dd>
-    </dl>
-    <p class="fine" style="margin:0">Prices were pulled ${Math.round(ageMin())} min ago and may have moved. Kalshi doesn't allow live re-checks from a browser, so open the contract and confirm the ask before buying. ${o.locked ? 'Buy the legs quickly: until every leg is filled you are exposed. “Locked” still carries platform and rule risk.' : ''}</p>
-    <details><summary>Show me the math</summary><div class="math">${h(mathText(o, e))}</div>
-      <p class="small" style="margin:8px 0 0">${h(o.logic)}</p></details>
-  </article>`;
-}
-
-function whatToBuy(o, e, legs) {
-  const urls = [...new Map(o.legs.map(l => [l.url, l])).values()];
-  const open = urls.map(l => `<a class="btn small" href="${h(l.url)}" target="_blank" rel="noopener">Open on ${h(l.platform)} ↗</a>`).join(' ');
-  const copyBtn = (l, label = 'Copy') => `<button type="button" class="btn small ghost" data-copy="${h(`${l.leg.side} — ${l.leg.name} (${l.leg.ticker})`)}">${label}</button>`;
-  const source = `<div class="source"><div class="label">Where the profit comes from</div><p>${h(profitSource(o, e))}</p></div>`;
-
-  // --- the sides ---
-  let sidesHtml;
-  if (legs.length <= 3) {
-    sidesHtml = `<div class="sides">${legs.map((l, i) => `
-      <div class="side">
-        <div class="side-head"><span class="side-tag">Side ${i + 1}</span><span class="side-bet ${l.leg.side === 'YES' ? 'yes' : 'no'}">${h(l.leg.side)}</span></div>
-        <p class="side-what"><b>${h(l.text)}</b></p>
-        <p class="side-pays">→ ${h(legPays(l.leg))}.</p>
-        <p class="small muted">Costs ${money(l.cost)} incl. ${money(l.fee)} ${tip('fees', 'fees')}. ${h(l.how)}</p>
-        <div class="leg-actions"><a class="btn small" href="${h(l.leg.url)}" target="_blank" rel="noopener">Open on ${h(l.leg.platform)} ↗</a>${copyBtn(l, 'Copy contract name')}</div>
-      </div>`).join('')}</div>`;
-  } else {
-    const sides = [...new Set(o.legs.map(l => l.side))].join(' / ');
-    const title = o.legs[0].name.split(' — ')[0];
-    sidesHtml = `<p style="margin:0 0 8px"><b>Buy ${e.qty} ${h(sides)} contracts on each of these ${legs.length} rows of “${h(title)}” on ${h(o.platform)}.</b>
-      <span class="muted">Total ${money(e.cost)} incl. ${money(e.fees)} ${tip('fees', 'fees')}. On the event page, press “${sides === 'NO' ? 'No' : 'Yes'}” on each row.</span></p>
-      <div class="leg-actions" style="margin:0 0 8px">${open}</div>
-      <div class="table-wrap"><table class="legs"><thead><tr><th>Row on the event page</th><th>Side</th><th>Pays $1 if the result is…</th><th class="n">Price</th><th class="n">Cost</th><th></th></tr></thead><tbody>${
-        legs.map((l, i) => { const f = e.legFills[i]; const px = f.worstPrice != null && Math.abs(f.worstPrice - f.avgPrice) > 1e-9 ? `up to ${cents(f.worstPrice)}` : cents(f.avgPrice);
-          const pays = l.leg.side === 'YES' ? h(outcomeOf(l.leg)) : `anything except ${h(outcomeOf(l.leg))}`;
-          return `<tr><td>${h(outcomeOf(l.leg))}</td><td>${h(l.leg.side)}</td><td class="small">${pays}</td><td class="n mono">${px}</td><td class="n mono">${money(l.cost)}</td><td>${copyBtn(l)}</td></tr>`; }).join('')}
-      </tbody></table></div>`;
-  }
-
-  // --- what happens in every outcome ---
-  const sc = scenarios(o);
-  let outcomes = '';
-  if (sc.length) {
-    const perLeg = sc[0].pays && legs.length <= 3;
-    outcomes = `<div><div class="label" style="margin-bottom:6px">What you get back in every outcome</div>
-      <div class="table-wrap"><table class="legs outcomes"><thead><tr><th>If…</th>${perLeg ? legs.map((_, i) => `<th class="n">Side ${i + 1} pays</th>`).join('') : '<th>What pays</th>'}<th class="n">You get back</th><th class="n">Profit</th></tr></thead><tbody>${
-        sc.map(r => { const back = r.total * e.qty, prof = back - e.cost;
-          return `<tr><td>${h(r.when)}</td>${perLeg ? r.pays.map(p => `<td class="n mono">${money(p * e.qty)}</td>`).join('') : `<td class="small">${h(r.text)}</td>`}
-            <td class="n mono"><b>${money(back)}</b></td><td class="n mono ${prof >= 0 ? 'pos' : 'neg'}">${prof >= 0 ? '+' : ''}${money(prof)}</td></tr>`; }).join('')}
-      </tbody></table></div>
-      <p class="small muted" style="margin:6px 0 0">You paid ${money(e.cost)} in total (${e.qty} sets). Every row is a profit, which is what makes it locked in.</p></div>`;
-  }
-  return `${source}<div><div class="label" style="margin-bottom:6px">The two sides of the trade</div>${sidesHtml}</div>${outcomes}`;
-}
-
-function mathText(o, e) {
-  const set = settings();
-  const lines = [];
-  lines.push(`Fee per fill = round up( ${'M'} × 0.07 × contracts × price × (1 − price) ) to $${set.feeRoundTo}`);
-  lines.push('');
-  o.legs.forEach((leg, i) => {
-    lines.push(`Leg ${i + 1}: BUY ${e.qty} × ${leg.side}  ${leg.ticker}   (fee multiplier M = ${leg.feeMultiplier})`);
-    let rem = e.qty;
-    for (const l of leg.levels) {
-      if (rem <= 0) break;
-      const take = Math.min(rem, l.size);
-      const fee = kalshiFee(l.price, take, { multiplier: leg.feeMultiplier, feeType: leg.feeType, roundTo: set.feeRoundTo });
-      lines.push(`   ${String(+take.toFixed(2)).padStart(7)} @ ${cents(l.price).padEnd(6)} = ${money(take * l.price).padStart(9)}   fee ${money(fee, 4)}`);
-      rem -= take;
-    }
-    const f = e.legFills[i];
-    lines.push(`   leg total ${money(f.cost + f.fee)}`);
-  });
-  lines.push('');
-  lines.push(`Total cost          ${money(e.cost)}  (fees ${money(e.fees)})`);
-  lines.push(`Guaranteed payout   ${e.qty} sets × $${o.minPayoff} = ${money(e.worstPayout)}`);
-  if (o.maxPayoff > o.minPayoff) lines.push(`Best-case payout    ${e.qty} sets × $${o.maxPayoff} = ${money(e.bestPayout)}`);
-  lines.push(`Worst-case profit   ${money(e.worstPayout)} − ${money(e.cost)} = ${money(e.profitWorst)}`);
-  const p = o.locked ? e.profitWorst : e.profitExpected;
-  lines.push(`Return              ${money(p)} ÷ ${money(e.cost)} = ${pct(e.returnPct, 3)}`);
-  lines.push(`Hold time           ${e.days.toFixed(2)} days (minimum counted: ${set.minHoldDays})`);
-  lines.push(`Annualized          ${pct(e.returnPct, 3)} × 365 ÷ ${e.days.toFixed(2)} = ${pct(e.annualizedPct, 2)}`);
-  lines.push(`Cash hurdle         T-bill ${pct(e.tbillPct)} + margin ${pct(o.locked ? set.lockedMarginPct : set.evMarginPct, 1)} = ${pct(e.hurdlePct)}`);
-  lines.push(`Your thresholds     profit ≥ $${set.minProfit}, return ≥ ${set.minReturnPct}%, annualized ≥ hurdle`);
-  lines.push(`Verdict             ${e.verdict}`);
-  return lines.join('\n');
+  </details>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -378,101 +310,6 @@ if (window.matchMedia('(max-width: 900px)').matches) document.getElementById('fi
 bindControls();
 load();
 setInterval(tick, 1000);
-
-// ---------------------------------------------------------------------------
-// Kalshi vs options (Robinhood)
-// ---------------------------------------------------------------------------
-function optionsCard({ o, e, e100 }, stale) {
-  const vcls = { 'WORTH IT': 'worth', 'MARGINAL': 'marginal', 'NOT WORTH IT': 'not' }[e.verdict];
-  const tb = S.data.tbill?.yieldPct;
-  const head = `<div class="chips">
-      <span class="chip verdict ${vcls}">${e.verdict}</span>
-      <span class="chip">${tip('positive expected value', h(o.riskLabel))}</span>
-      <span class="chip">${h(o.asset)}</span>
-      <span class="chip">${tip('confidence', `confidence: ${h(o.confidence.level)}`)}</span>
-      ${stale ? '<span class="chip gone">may no longer exist</span>' : ''}
-    </div>
-    <div>
-      <div class="label">Kalshi vs ${h(o.underlying.etf)} options · Kalshi + Robinhood</div>
-      <h3>${h(o.title)}</h3>
-      <p class="small muted" style="margin:4px 0 0">${h(e.verdictWhy)}</p>
-    </div>`;
-  if (!e.qty) {
-    return `<article class="card v-${vcls}${stale ? ' stale-card' : ''}">${head}
-      <div class="notice warn">Too small at ${money(S.amount, 0)}: ${h(e.verdictWhy)}. Raise “Amount I want to use” to see the trade.</div>
-      <div class="source"><div class="label">Where the profit comes from</div><p>${h(optionsProfitSource(o, { qty: o.spread.width * 100, tailProfit: o.perUnit.tailEdge * o.spread.width * 100 }))}</p></div></article>`;
-  }
-  const sides = optionsSides(o, e);
-  const sc = optionsScenarios(o, e);
-  const settleK = new Date(o.kalshi.refTime), settleO = new Date(o.spread.expiryTime);
-  const fmtT = d => d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
-  const cell = v => (typeof v === 'number' ? money(v) : `$${h(v)}`);
-  const yesK = o.kalshi.side === 'YES' ? o.probs.kalshi : 1 - o.probs.kalshi;
-  const yesO = o.probs.options == null ? null : (o.kalshi.side === 'YES' ? o.probs.options : 1 - o.probs.options);
-  return `<article class="card v-${vcls}${stale ? ' stale-card' : ''}">${head}
-    <div class="kpis">
-      <div class="kpi"><span class="label">${tip('expected value', 'Expected profit')}</span><span class="v ${e.profitExpected > 0 ? 'pos' : 'neg'}">${money(e.profitExpected)}</span><span class="small muted">${pct(e.pLoss * 100, 1)} chance of a loss</span></div>
-      <div class="kpi"><span class="label">If timing doesn't bite</span><span class="v ${e.tailProfit > 0 ? 'pos' : 'neg'}">${money(e.tailProfit)}</span><span class="small muted">normal outcomes</span></div>
-      <div class="kpi"><span class="label">${tip('annualized return', 'Per year')}</span><span class="v">${pct(e.annualizedPct, 1)}</span><span class="small muted">vs ${tip('t-bill rate', `T-bill ${pct(tb)}`)}</span></div>
-    </div>
-    <div class="source"><div class="label">Where the profit comes from</div><p>${h(optionsProfitSource(o, e))}</p></div>
-    <div><div class="label" style="margin-bottom:6px">The two sides of the trade</div><div class="sides">${sides.map((sd, i) => `
-      <div class="side">
-        <div class="side-head"><span class="side-tag">Side ${i + 1} · ${h(sd.venue)}</span><span class="side-bet ${sd.side === 'YES' ? 'yes' : 'no'}">${h(sd.side)}</span></div>
-        <p class="side-what"><b>${h(sd.text)}</b></p>
-        <p class="side-pays">→ ${h(sd.pays)}.</p>
-        <p class="small muted">Costs ${money(sd.cost)}${sd.fee > 0 ? ` incl. ${money(sd.fee)} fees` : ''}. ${h(sd.how)}</p>
-        <div class="leg-actions"><a class="btn small" href="${h(sd.url)}" target="_blank" rel="noopener">Open on ${h(sd.venue)} ↗</a><button type="button" class="btn small ghost" data-copy="${h(sd.copy)}">Copy details</button></div>
-      </div>`).join('')}</div></div>
-    <div><div class="label" style="margin-bottom:6px">What you get back in every outcome</div>
-      <div class="table-wrap"><table class="legs outcomes"><thead><tr><th>If…</th><th class="n">Side 1 pays</th><th class="n">Side 2 pays</th><th class="n">You get back</th><th class="n">Profit</th></tr></thead><tbody>${
-        sc.map(r => { const prof = typeof r.total === 'number' ? r.total - e.cost : null;
-          return `<tr><td>${h(r.when)}<div class="small ${r.risk ? 'neg' : 'muted'}">${h(r.note)}</div></td><td class="n mono">${cell(r.kalshi)}</td><td class="n mono">${cell(r.options)}</td>
-            <td class="n mono"><b>${cell(r.total)}</b></td><td class="n mono ${prof == null ? (r.risk ? 'neg' : 'pos') : prof >= 0 ? 'pos' : 'neg'}">${prof == null ? (r.risk ? `down to −${money(e.cost)}` : 'bonus') : `${prof >= 0 ? '+' : ''}${money(prof)}`}</td></tr>`; }).join('')}
-      </tbody></table></div>
-      <p class="small muted" style="margin:6px 0 0">You pay ${money(e.cost)} in total. ${o.underlying.index ? 'Kalshi and the options settle on the same official close, so the only risk left is execution.' : `The last row is why this isn't locked in: Kalshi settles ${fmtT(settleK)}, the options expire ${fmtT(settleO)}.`}</p></div>
-    <dl class="stats">
-      <dt>Total cost</dt><dd><b>${money(e.cost)}</b> (Kalshi ${money(e.kalshiCost + e.kalshiFee)} + options ${money(e.optionCost)})</dd>
-      <dt>Probability</dt><dd>Kalshi ${pct(yesK * 100, 1)} vs options ${yesO == null ? '—' : pct(yesO * 100, 1)} for “${h(o.kalshi.outcome)}”</dd>
-      <dt>Chance of a loss</dt><dd>${pct(e.pLoss * 100, 2)} (simulated, ${o.sim.paths.toLocaleString()} paths)</dd>
-      <dt>Worst 1% outcome</dt><dd>${money(e.profitP1)}</dd>
-      <dt>Best / max loss</dt><dd>${money(e.profitBest)} / ${money(e.maxLoss)}</dd>
-      <dt>With Robinhood fees</dt><dd>${o.withPublishedFees?.profitExpected != null ? `${money(o.withPublishedFees.profitExpected)} expected at $${o.withPublishedFees.feePerContract.toFixed(2)}/contract (their published schedule)` : '—'}</dd>
-      <dt>Worse option fills</dt><dd>${o.worseFills?.profitExpected != null ? `${money(o.worseFills.profitExpected)} expected if each option leg fills 1¢/share worse` : '—'}</dd>
-      ${o.unhedged ? `<dt>Kalshi only, no hedge</dt><dd>${money(o.unhedged.evPerContract * e.qty)} expected on the same ${e.qty.toLocaleString()} contracts, but a ${pct(o.unhedged.pLose * 100, 1)} chance of losing ${money(e.kalshiCost + e.kalshiFee)}</dd>` : ''}
-      <dt>${tip('order book depth', 'Liquidity')}</dt><dd>${e.depthLimited ? `Limited to ${e.spreads} spread${e.spreads > 1 ? 's' : ''} by Kalshi depth or option size.` : `${e.spreads} spread${e.spreads > 1 ? 's' : ''} × ${o.spread.width * 100} Kalshi contracts each.`} Up to about ${money(o.fillableDollars)} fits the books.</dd>
-      <dt>${tip('settlement', 'Settles')}</dt><dd>Kalshi ${fmtT(settleK)} · options ${fmtT(settleO)} · money tied up ${daysText(e.days)}</dd>
-      <dt>Confidence</dt><dd>${h(o.confidence.level)}${o.confidence.why.length ? ` — ${h(o.confidence.why.join('; '))}` : ''}</dd>
-    </dl>
-    <p class="fine" style="margin:0">Option prices are 15-minute delayed and Kalshi prices were pulled ${Math.round(ageMin())} min ago; confirm both before trading. Place the Kalshi side and the option spread within minutes of each other. ${h(o.underlying.settleNote)}</p>
-    <details><summary>Show me the math</summary><div class="math">${h(optionsMath(o, e))}</div></details>
-  </article>`;
-}
-
-function optionsMath(o, e) {
-  const a = o.assumptions, u = o.underlying, s = o.spread, p = o.perUnit;
-  const L = [];
-  L.push(`Mapping: ${u.etf} = ${u.ratio.toPrecision(6)} × ${u.name}   (${u.ratioSource})`);
-  L.push(`Kalshi strike ${o.kalshi.strike} → ${u.etf} ${(o.kalshi.strike * u.ratio).toFixed(3)}; option strikes kept ${(u.margin * 100).toFixed(1)}% inside Side 1's region`);
-  L.push('');
-  L.push(`Per $1 of payout:`);
-  L.push(`  Kalshi ${o.kalshi.side} ${cents(o.probs.kalshi)} + fee        = ${cents(p.kalshi)}`);
-  L.push(`  ${s.type} spread ${cents(s.debit)} ÷ $${s.width} width     = ${cents(p.option)}`);
-  L.push(`  Total                                = ${cents(p.total)}  → ${cents(p.tailEdge)} per $1 in normal outcomes`);
-  L.push('');
-  L.push(`Size: ${e.spreads} spread(s) × 100 × $${s.width} = ${e.qty} Kalshi contracts covered`);
-  L.push(`Cost: Kalshi ${money(e.kalshiCost)} + fees ${money(e.kalshiFee)} + options ${money(e.optionCost)} = ${money(e.cost)}`);
-  L.push(`Normal outcomes pay ${money(e.qty)} → ${money(e.tailProfit)}`);
-  L.push('');
-  L.push(`Simulation (${a.paths.toLocaleString()} paths): ${a.model}`);
-  L.push(`  volatility ${(a.sigma * 100).toFixed(1)}%/yr · drift 0 · ${u.etf} tracking noise ${(a.basisSigma * 100).toFixed(2)}%`);
-  L.push(`  Kalshi settles in ${(a.yearsToKalshi * 365).toFixed(2)} days, options expire in ${(a.yearsToExpiry * 365).toFixed(2)} days`);
-  L.push(`  average payout ${o.sim.meanPayout.toFixed(4)} per $1 · P(payout < $1) ${(o.sim.pUnderOne * 100).toFixed(2)}% · P(bonus) ${(o.sim.pBonus * 100).toFixed(1)}%`);
-  L.push(`Expected profit ${e.qty} × ${o.sim.meanPayout.toFixed(4)} − ${money(e.cost)} = ${money(e.profitExpected)}`);
-  L.push(`Annualized ${pct(e.returnPct, 3)} × 365 ÷ ${e.days.toFixed(2)} days = ${pct(e.annualizedPct, 1)}  (hurdle ${pct(e.hurdlePct)} = T-bill + ${S.data.settings.verdict.evMarginPct} for can-lose trades)`);
-  L.push(`Verdict ${e.verdict}`);
-  return L.join('\n');
-}
 
 function renderOptionBets() {
   const box = document.getElementById('option-bets');
