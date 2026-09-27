@@ -521,10 +521,13 @@ function renderOptionBets() {
                 <button type="button" class="btn small ghost" data-copy="${h(`Buy ${hg.buy.label}, sell ${hg.sell.label}, limit $${hg.debit.toFixed(2)} debit`)}">Copy option order</button></div></li>` : ''}
           </ol>
           <div class="bet-result">
-            <div><b>Step 1 only:</b> +${(r.ev * 100).toFixed(1)}¢ expected per contract if the options are right, but it loses ${(r.kalshiPrice * 100).toFixed(1)}¢ about ${pctx(1 - r.optionsProb)} of the time. For ${n} contracts: ${money(r.ev * n)} expected, ${money(r.kalshiPrice * n)} at risk.</div>
+            <div class="bet-verdict-line">${hedged
+              ? `<b>Do both:</b> the hedge locks this in whichever way it goes.`
+              : `<b>Kalshi bet only</b> — the hedge below costs more than it's worth here, so skip it (or skip the trade).`}</div>
+            <div><b>Kalshi alone:</b> +${(r.ev * 100).toFixed(1)}¢ expected per contract if the options are right, but loses ${(r.kalshiPrice * 100).toFixed(1)}¢ about ${pctx(1 - r.optionsProb)} of the time. For ${n} contracts: ${money(r.ev * n)} expected, ${money(r.kalshiPrice * n)} at risk.</div>
             ${hg ? (hedgeEdge > 0
-              ? `<div class="pos"><b>Steps 1 + 2:</b> ${(r.kalshiPrice * 100 + (hedgeTotal - r.kalshiPrice - hg.perUnit) * 100).toFixed(1)}¢ + ${(hg.perUnit * 100).toFixed(1)}¢ = ${(hedgeTotal * 100).toFixed(1)}¢ per $1 of payout, so <b>+${(hedgeEdge * 100).toFixed(1)}¢ per $1</b> whichever way it goes (${money(hedgeEdge * n)} on ${n} contracts + 1 spread)${gap >= 1 ? `, except for the small timing risk because the options expire ${h(gapTxt)}` : ''}.</div>`
-              : `<div class="muted"><b>Steps 1 + 2:</b> ${(hedgeTotal * 100).toFixed(1)}¢ per $1 of payout, which is more than it pays, so the insurance costs more than the edge. Skip Step 2, or skip the trade.</div>`) : ''}
+              ? `<div class="pos"><b>Plus the Robinhood hedge:</b> <b>+${(hedgeEdge * 100).toFixed(1)}¢ per $1</b> locked in whichever way it goes (${money(hedgeEdge * n)} on ${n} contracts + 1 spread)${gap >= 1 ? `, except for the small timing risk because the options expire ${h(gapTxt)}` : ''}.</div>`
+              : `<div class="muted"><b>Plus the Robinhood hedge:</b> costs ${(hedgeTotal * 100).toFixed(1)}¢ per $1 of payout — more than the $1 it pays back, so it's not worth adding here.</div>`) : ''}
           </div>
         </div>
       </details>`; }).join('')}</div>

@@ -228,3 +228,4 @@ table.outcomes td { vertical-align: top; }
 .step-tag { font: 700 0.72rem var(--font-body); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
 .bet-result { background: var(--surface-2); border-radius: 8px; padding: 8px 12px; display: grid; gap: 4px; font-size: 0.9rem; }
 .bet-result .pos { color: var(--good); }
+.bet-verdict-line { font-size: 0.95rem; padding-bottom: 2px; margin-bottom: 2px; border-bottom: 1px solid var(--line); }
