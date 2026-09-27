@@ -1,0 +1,65 @@
+# Runs every 10 minutes (GitHub often starts scheduled runs late; the dashboard shows the true data age).
+# Scans markets, sends any email alerts, then publishes data.json + alert state to the `data` branch
+# as ONE force-pushed orphan commit, so git history never grows.
+name: Scan
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Fetch previous alert state from the data branch
+        run: |
+          mkdir -p prev/state
+          if git fetch --depth=1 origin data 2>/dev/null; then
+            git show origin/data:state/alerts.json > prev/state/alerts.json 2>/dev/null || rm -f prev/state/alerts.json
+          fi
+
+      - name: Scan markets (includes link check)
+        run: node scanner/run.js --out out
+
+      - name: Email alerts
+        continue-on-error: true
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          ALERT_TO_EMAIL: ${{ secrets.ALERT_TO_EMAIL }}
+          DASHBOARD_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: node scanner/alerts.js --data out/data.json --prev prev/state/alerts.json --out out/state/alerts.json
+
+      - name: Publish to the data branch (single orphan commit)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd out
+          if [ ! -f state/alerts.json ]; then
+            mkdir -p state
+            cp ../prev/state/alerts.json state/alerts.json 2>/dev/null || echo '{"sent":{},"daily":{}}' > state/alerts.json
+          fi
+          git init -q -b data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "data $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push -qf "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data
