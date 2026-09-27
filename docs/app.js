@@ -479,20 +479,10 @@ function renderOptionBets() {
   if (!box) return;
   const d = S.data, rows = d.optionComparisons || [];
   const closed = d.optionsMarketOpen === false;
-  const howTo = `<details class="panel howto"><summary>How to place an option spread on Robinhood</summary>
-    <ol class="steps small" style="margin-top:10px">
-      <li>You need <b>options Level 3</b> (spreads), which Robinhood only offers in margin accounts. Check under Account → Settings → Options trading. With Level 2 you can only do Step 1 (the Kalshi bet).</li>
-      <li>Open the ETF on Robinhood (the button on each row), then tap <b>Trade</b> → <b>Trade options</b>.</li>
-      <li>Tap <b>Strategy builder</b> (top left) and choose a <b>vertical spread</b>.</li>
-      <li>Pick the expiration date shown in the row, then set the two strikes: the one you <b>buy</b> and the one you <b>sell</b>. The row tells you both.</li>
-      <li>Set the quantity (1 spread covers the number of Kalshi contracts shown), choose a <b>limit</b> price near the row's price, review, and submit. A price closer to the ask fills faster.</li>
-    </ol>
-    <p class="small muted" style="margin:6px 0 0">A spread you pay for up front (a debit spread) can never lose more than what you paid. Source: Robinhood support, “About the Options Strategy Builder” and “Advanced options strategies”.</p></details>`;
-  if (!rows.length) { box.innerHTML = howTo + '<p class="muted">No disagreements with a positive edge this scan.</p>'; return; }
+  if (!rows.length) { box.innerHTML = '<p class="muted">No disagreements with a positive edge this scan.</p>'; return; }
   const fmtDay = iso => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   const pctx = p => (p < 0.1 ? `${(p * 100).toFixed(1)}%` : `${Math.round(p * 100)}%`);
   box.innerHTML = `${closed ? `<div class="notice warn"><b>Options market closed.</b> Option prices below are from the last close (options trade 9:30am–4pm ET, weekdays), so they may be different when you trade. Check the live price in Robinhood first. Kalshi prices are live.</div>` : ''}
-    ${howTo}
     <div class="bets">${rows.map(r => {
       const yesK = r.side === 'YES' ? r.kalshiPrice : 1 - r.kalshiPrice;
       const yesO = r.side === 'YES' ? r.optionsProb : 1 - r.optionsProb;
@@ -504,28 +494,39 @@ function renderOptionBets() {
       const gap = Math.abs(r.gapHours);
       const gapH = Math.round(gap), gapD = Math.round(gap / 24);
       const gapTxt = gap < 1 ? 'the same time' : gap < 48 ? `${gapH} ${gapH === 1 ? 'hour' : 'hours'} ${r.gapHours > 0 ? 'after' : 'before'} Kalshi settles` : `${gapD} ${gapD === 1 ? 'day' : 'days'} ${r.gapHours > 0 ? 'after' : 'before'} Kalshi settles`;
-      return `<article class="bet">
-        <div class="bet-head">
-          <div><a href="${h(r.url)}" target="_blank" rel="noopener"><b>${h(r.eventTitle)}</b></a><div class="small muted">“${h(r.outcome)}” · settles ${h(fmtDay(r.settles))}</div></div>
-          <div class="bet-probs"><span>Kalshi <b>${pctx(yesK)}</b></span><span>Options <b>${pctx(yesO)}</b></span></div>
+      const hedged = hg && hedgeEdge > 0;              // a real locked-in hedge is available and worth using
+      const edge = hedged ? hedgeEdge : r.ev;            // ¢ per $1, the number the badge is judged on
+      const verdict = edge >= 0.03 ? { l: 'WORTH IT', c: 'worth' } : edge >= 0.01 ? { l: 'MARGINAL', c: 'marginal' } : { l: 'NOT WORTH IT', c: 'not' };
+      const typeTag = hedged ? { l: 'ARB · hedged', c: 'locked' } : { l: 'Unhedged bet', c: '' };
+      return `<details class="bet">
+        <summary class="bet-head">
+          <div class="bet-title"><span class="bet-name">${h(r.eventTitle)}</span><span class="small muted">“${h(r.outcome)}” · settles ${h(fmtDay(r.settles))}</span></div>
+          <div class="bet-sum">
+            <span class="chip verdict ${verdict.c}">${verdict.l}</span>
+            <span class="chip ${typeTag.c}">${typeTag.l}</span>
+            <span class="bet-probs"><span>Kalshi <b>${pctx(yesK)}</b></span><span>Options <b>${pctx(yesO)}</b></span></span>
+            <span class="bet-edge ${edge > 0 ? 'pos' : ''}">${edge > 0 ? '+' : ''}${(edge * 100).toFixed(1)}¢/$1</span>
+          </div>
+        </summary>
+        <div class="bet-body">
+          <ol class="bet-steps">
+            <li><span class="step-tag">Step 1 · Kalshi</span>
+              <div>Buy <span class="side-bet ${r.side === 'YES' ? 'yes' : 'no'}">${h(r.side)}</span> at <b>${(r.kalshiPrice * 100).toFixed(1)}¢</b>. Wins $1 if ${h(wins)}.</div>
+              <div class="leg-actions"><a class="btn small" href="${h(r.url)}" target="_blank" rel="noopener">Open on Kalshi ↗</a></div></li>
+            ${hg ? `<li><span class="step-tag">Step 2 · Robinhood (insurance, optional)</span>
+              <div><b>Buy</b> ${h(hg.buy.label)} at ${cents(hg.buy.price)} and <b>sell</b> ${h(hg.sell.label)} at ${cents(hg.sell.price)}.
+                Net cost <b>${cents(hg.debit)} per share = $${(hg.debit * 100).toFixed(2)} per spread</b>.</div>
+              <div class="small muted">Pays $${(hg.width * 100).toFixed(0)} per spread if ${h(hg.paysWhen)} (${h(hg.underlyingZone)}), the case where Step 1 loses. Use 1 spread for every ${n} Kalshi contracts. Expires ${h(gapTxt)}.</div>
+              <div class="leg-actions"><a class="btn small" href="${h(hg.robinhoodUrl)}" target="_blank" rel="noopener">Open ${h(r.etf)} on Robinhood ↗</a>
+                <button type="button" class="btn small ghost" data-copy="${h(`Buy ${hg.buy.label}, sell ${hg.sell.label}, limit $${hg.debit.toFixed(2)} debit`)}">Copy option order</button></div></li>` : ''}
+          </ol>
+          <div class="bet-result">
+            <div><b>Step 1 only:</b> +${(r.ev * 100).toFixed(1)}¢ expected per contract if the options are right, but it loses ${(r.kalshiPrice * 100).toFixed(1)}¢ about ${pctx(1 - r.optionsProb)} of the time. For ${n} contracts: ${money(r.ev * n)} expected, ${money(r.kalshiPrice * n)} at risk.</div>
+            ${hg ? (hedgeEdge > 0
+              ? `<div class="pos"><b>Steps 1 + 2:</b> ${(r.kalshiPrice * 100 + (hedgeTotal - r.kalshiPrice - hg.perUnit) * 100).toFixed(1)}¢ + ${(hg.perUnit * 100).toFixed(1)}¢ = ${(hedgeTotal * 100).toFixed(1)}¢ per $1 of payout, so <b>+${(hedgeEdge * 100).toFixed(1)}¢ per $1</b> whichever way it goes (${money(hedgeEdge * n)} on ${n} contracts + 1 spread)${gap >= 1 ? `, except for the small timing risk because the options expire ${h(gapTxt)}` : ''}.</div>`
+              : `<div class="muted"><b>Steps 1 + 2:</b> ${(hedgeTotal * 100).toFixed(1)}¢ per $1 of payout, which is more than it pays, so the insurance costs more than the edge. Skip Step 2, or skip the trade.</div>`) : ''}
+          </div>
         </div>
-        <ol class="bet-steps">
-          <li><span class="step-tag">Step 1 · Kalshi</span>
-            <div>Buy <span class="side-bet ${r.side === 'YES' ? 'yes' : 'no'}">${h(r.side)}</span> at <b>${(r.kalshiPrice * 100).toFixed(1)}¢</b>. Wins $1 if ${h(wins)}.</div>
-            <div class="leg-actions"><a class="btn small" href="${h(r.url)}" target="_blank" rel="noopener">Open on Kalshi ↗</a></div></li>
-          ${hg ? `<li><span class="step-tag">Step 2 · Robinhood (insurance, optional)</span>
-            <div><b>Buy</b> ${h(hg.buy.label)} at ${cents(hg.buy.price)} and <b>sell</b> ${h(hg.sell.label)} at ${cents(hg.sell.price)}.
-              Net cost <b>${cents(hg.debit)} per share = $${(hg.debit * 100).toFixed(2)} per spread</b>.</div>
-            <div class="small muted">Pays $${(hg.width * 100).toFixed(0)} per spread if ${h(hg.paysWhen)} (${h(hg.underlyingZone)}), the case where Step 1 loses. Use 1 spread for every ${n} Kalshi contracts. Expires ${h(gapTxt)}.</div>
-            <div class="leg-actions"><a class="btn small" href="${h(hg.robinhoodUrl)}" target="_blank" rel="noopener">Open ${h(r.etf)} on Robinhood ↗</a>
-              <button type="button" class="btn small ghost" data-copy="${h(`Buy ${hg.buy.label}, sell ${hg.sell.label}, limit $${hg.debit.toFixed(2)} debit`)}">Copy option order</button></div></li>` : ''}
-        </ol>
-        <div class="bet-result">
-          <div><b>Step 1 only:</b> +${(r.ev * 100).toFixed(1)}¢ expected per contract if the options are right, but it loses ${(r.kalshiPrice * 100).toFixed(1)}¢ about ${pctx(1 - r.optionsProb)} of the time. For ${n} contracts: ${money(r.ev * n)} expected, ${money(r.kalshiPrice * n)} at risk.</div>
-          ${hg ? (hedgeEdge > 0
-            ? `<div class="pos"><b>Steps 1 + 2:</b> ${(r.kalshiPrice * 100 + (hedgeTotal - r.kalshiPrice - hg.perUnit) * 100).toFixed(1)}¢ + ${(hg.perUnit * 100).toFixed(1)}¢ = ${(hedgeTotal * 100).toFixed(1)}¢ per $1 of payout, so <b>+${(hedgeEdge * 100).toFixed(1)}¢ per $1</b> whichever way it goes (${money(hedgeEdge * n)} on ${n} contracts + 1 spread)${gap >= 1 ? `, except for the small timing risk because the options expire ${h(gapTxt)}` : ''}.</div>`
-            : `<div class="muted"><b>Steps 1 + 2:</b> ${(hedgeTotal * 100).toFixed(1)}¢ per $1 of payout, which is more than it pays, so the insurance costs more than the edge. Skip Step 2, or skip the trade.</div>`) : ''}
-        </div>
-      </article>`; }).join('')}</div>
+      </details>`; }).join('')}</div>
     <p class="small muted" style="margin:8px 0 0">Be skeptical when one asset shows edges in the same direction at every strike: that usually means the reference price differs from Kalshi's feed (gold and silver settle on Pyth, crypto on CF Benchmarks), not free money.</p>`;
 }
