@@ -106,7 +106,7 @@ All thresholds live in **`config/settings.json`**. On GitHub, open the file → 
 
 ## Troubleshooting
 
-- **How the 10-minute refresh works.** GitHub's scheduler often starts jobs late or skips them, so each Scan run keeps scanning every 10 minutes by itself for about 55 minutes, and the next run waits in the queue. In the Actions tab you'll see one long Scan run at a time; an occasional "cancelled" run is just a spare queued run being replaced. That's normal.
+- **How the 10-minute refresh works.** GitHub's scheduler often starts jobs late or skips them, so each Scan run keeps scanning every 10 minutes by itself for about 55 minutes and queues the next run as soon as it starts. To stop all scanning: Actions → Scan → “…” → **Disable workflow**. In the Actions tab you'll see one long Scan run at a time; an occasional "cancelled" run is just a spare queued run being replaced. That's normal.
 - **Data is older than 10 minutes.** Usually a slow scan or a short gap between runs. The page shows the true age and turns red past 25 minutes.
 - **Scan failed at "Publish to the data branch".** Redo step 3 (Read and write permissions).
 - **Test email failed with "Invalid login" / 535.** The app password is wrong or 2-Step Verification is off. Make a new app password and update the `GMAIL_APP_PASSWORD` secret (Settings → Secrets → pencil icon).
