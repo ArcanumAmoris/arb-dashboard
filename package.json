@@ -11,5 +11,5 @@
     "test": "node --test test/*.test.js"
   },
   "engines": { "node": ">=20" },
-  "dependencies": { "nodemailer": "^6.9.16" }
+  "dependencies": { "nodemailer": "^10.0.2" }
 }
